@@ -7,8 +7,12 @@ from endpoints import api_bp
 
 app = Flask(__name__)
 
-# CORS: allow frontend origin(s). Comma-separated list in env, or default dev + common locals
-_cors_origins = os.environ.get("CORS_ORIGINS", "http://127.0.0.1:5500,http://localhost:5500,http://localhost:3000,http://127.0.0.1:3000")
+# CORS: allow frontend origin(s). Comma-separated list in env, or default (dev + production)
+_default_origins = (
+    "http://127.0.0.1:5500,http://localhost:5500,http://localhost:3000,http://127.0.0.1:3000,"
+    "https://tryadbase.com,https://www.tryadbase.com"
+)
+_cors_origins = os.environ.get("CORS_ORIGINS", _default_origins)
 CORS(app, origins=[o.strip() for o in _cors_origins.split(",") if o.strip()], supports_credentials=True)
 
 app.register_blueprint(api_bp)
