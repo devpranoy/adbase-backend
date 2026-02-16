@@ -20,6 +20,17 @@ With the **service role** key the backend can read/write regardless of RLS. If y
 
 To add a policy: open the bucket → **Policies** → **New policy** and choose template or custom. For this app, leaving the bucket public and using only the service role key in the backend is enough.
 
-## 3. Verify
+## 3. Create the videos bucket (for persisted outputs)
 
-After the bucket exists and is public, the Flask upload endpoint will store files under `uploads/<filename>` and return the public URL. Replicate will use that URL as the image input.
+Completed videos are copied from Replicate into your storage so links don’t expire after 1 hour.
+
+1. In **Storage**, click **New bucket** again.
+2. **Name:** `product-videos` (or set env `SUPABASE_BUCKET_VIDEOS` to match).
+3. **Public bucket:** turn **ON** so the app can return public video URLs.
+4. Click **Create bucket**.
+
+Videos are stored under `completed/<job_id>.mp4`.
+
+## 4. Verify
+
+After the buckets exist and are public, the Flask upload endpoint will store images under `uploads/<filename>` and return the public URL. Replicate will use that URL as the image input. When a job succeeds, the backend downloads the video from Replicate and uploads it to `product-videos`; the database is updated with that permanent URL.

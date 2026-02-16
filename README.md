@@ -31,6 +31,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `SUPABASE_URL` – Supabase project URL  
 - `SUPABASE_SERVICE_ROLE_KEY` – Supabase service role key  
 - `SUPABASE_BUCKET_PRODUCT_IMAGES` – (optional) Storage bucket name, default `product-images`  
+- `SUPABASE_BUCKET_VIDEOS` – (optional) Storage bucket for persisted video outputs, default `product-videos`  
 - `REPLICATE_API_TOKEN` – Replicate API token  
 - `REPLICATE_IMAGE_TO_VIDEO_VERSION` – (optional) Model, default `google/veo-3.1-fast`  
 - `REPLICATE_VIDEO_RESOLUTION` – (optional) `720p` or `1080p`, default `720p`  

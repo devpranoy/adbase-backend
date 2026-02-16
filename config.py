@@ -4,6 +4,7 @@ import os
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_BUCKET_PRODUCT_IMAGES = os.environ.get("SUPABASE_BUCKET_PRODUCT_IMAGES", "product-images")
+SUPABASE_BUCKET_VIDEOS = os.environ.get("SUPABASE_BUCKET_VIDEOS", "product-videos")
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "").strip()
 # Image-to-video model (owner/name or owner/name:version). Default: Google Veo 3.1 Fast

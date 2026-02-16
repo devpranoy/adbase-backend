@@ -8,6 +8,7 @@ from supabase_client import (
     create_job,
     get_job,
     list_jobs,
+    persist_replicate_video,
     update_job_prediction,
     update_job_result,
 )
@@ -120,7 +121,12 @@ def get_job_status(job_id: str):
         try:
             status, output_url = get_prediction(job["replicate_prediction_id"])
             if status == "succeeded" and output_url:
-                update_job_result(job_id, str(g.user_id), output_url, "succeeded")
+                # Persist to our storage so link doesn't expire after 1h
+                try:
+                    permanent_url = persist_replicate_video(output_url, job_id)
+                    update_job_result(job_id, str(g.user_id), permanent_url, "succeeded")
+                except Exception:
+                    update_job_result(job_id, str(g.user_id), output_url, "succeeded")
                 job = get_job(job_id, str(g.user_id)) or job
             elif status == "failed" or status == "canceled":
                 update_job_result(job_id, str(g.user_id), None, "failed")
@@ -153,7 +159,11 @@ def get_job_result(job_id: str):
         try:
             status, output_url = get_prediction(job.get("replicate_prediction_id") or "")
             if status == "succeeded" and output_url:
-                update_job_result(job_id, str(g.user_id), output_url, "succeeded")
+                try:
+                    permanent_url = persist_replicate_video(output_url, job_id)
+                    update_job_result(job_id, str(g.user_id), permanent_url, "succeeded")
+                except Exception:
+                    update_job_result(job_id, str(g.user_id), output_url, "succeeded")
                 job = get_job(job_id, str(g.user_id)) or job
         except Exception:
             pass

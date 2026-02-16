@@ -1,10 +1,13 @@
 """Supabase client and storage helpers."""
+import urllib.request
+
 from supabase import create_client
 
 from config import (
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
     SUPABASE_BUCKET_PRODUCT_IMAGES,
+    SUPABASE_BUCKET_VIDEOS,
 )
 
 _client = None
@@ -31,6 +34,32 @@ def upload_product_image(file_bytes: bytes, filename: str, content_type: str = "
     path = f"uploads/{filename}"
     storage.upload(path, file_bytes, file_options={"content-type": content_type})
     return storage.get_public_url(path)
+
+
+def upload_video(video_bytes: bytes, job_id: str) -> str:
+    """
+    Upload a video to Supabase Storage (product-videos bucket) and return its public URL.
+    Path: completed/<job_id>.mp4. Bucket must be public.
+    """
+    client = get_client()
+    storage = client.storage.from_(SUPABASE_BUCKET_VIDEOS)
+    path = f"completed/{job_id}.mp4"
+    storage.upload(path, video_bytes, file_options={"content-type": "video/mp4"})
+    return storage.get_public_url(path)
+
+
+def persist_replicate_video(replicate_video_url: str, job_id: str) -> str:
+    """
+    Download video from Replicate URL and upload to our storage. Returns our permanent URL.
+    Use this when a job succeeds so the link does not expire after 1 hour.
+    """
+    req = urllib.request.Request(
+        replicate_video_url,
+        headers={"User-Agent": "AdbaseBackend/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        video_bytes = resp.read()
+    return upload_video(video_bytes, job_id)
 
 
 # --- Jobs table helpers ---
