@@ -37,6 +37,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `REPLICATE_VIDEO_DURATION` – (optional) Seconds: `4`, `6`, or `8`, default `8`  
 - `REPLICATE_VIDEO_ASPECT_RATIO` – (optional) `16:9` or `9:16`, default `9:16`  
 - `JWT_SECRET` – Secret used to sign login JWTs  
+- `CORS_ORIGINS` – (optional) Comma-separated allowed origins for CORS; default includes `http://127.0.0.1:5500`, `http://localhost:5500`, `http://localhost:3000`, `http://127.0.0.1:3000`. Add your production frontend URL when deploying.
 
 ## API
 
