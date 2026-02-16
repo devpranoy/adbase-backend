@@ -24,6 +24,25 @@ gunicorn main:app
 
 Your Flask application is now available at `http://localhost:3000`.
 
+## Environment variables
+
+Set these locally (and in Vercel) for auth, Supabase, and Replicate:
+
+- `SUPABASE_URL` – Supabase project URL  
+- `SUPABASE_SERVICE_ROLE_KEY` – Supabase service role key  
+- `SUPABASE_BUCKET_PRODUCT_IMAGES` – (optional) Storage bucket name, default `product-images`  
+- `REPLICATE_API_TOKEN` – Replicate API token  
+- `REPLICATE_IMAGE_TO_VIDEO_VERSION` – (optional) Model version, default aicapcut SVD img2vid  
+- `JWT_SECRET` – Secret used to sign login JWTs  
+
+## API
+
+- **POST /api/auth/login** – Body: `{ "username", "password" }`. Returns `{ "token": "..." }`.  
+- **POST /api/jobs/upload** – Auth: Bearer token. Form: `image` (file), `prompt` (optional). Returns `job_id`, `image_url`, `status`.  
+- **POST /api/jobs/<job_id>/start** – Auth: Bearer. Starts Replicate image-to-video job. Returns `job_id`, `prediction_id`, `status`.  
+- **GET /api/jobs/<job_id>** – Auth: Bearer. Returns job status and, when done, `output_video_url`.  
+- **GET /api/jobs/<job_id>/result** – Auth: Bearer. Returns `{ "output_video_url": "..." }` when ready, or 202 while processing.  
+
 ## One-Click Deploy
 
 Deploy the example using [Vercel](https://vercel.com?utm_source=github&utm_medium=readme&utm_campaign=vercel-examples):
