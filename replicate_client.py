@@ -3,7 +3,13 @@ import os
 
 import replicate
 
-from config import REPLICATE_API_TOKEN, REPLICATE_IMAGE_TO_VIDEO_VERSION
+from config import (
+    REPLICATE_API_TOKEN,
+    REPLICATE_IMAGE_TO_VIDEO_VERSION,
+    REPLICATE_VIDEO_RESOLUTION,
+    REPLICATE_VIDEO_DURATION,
+    REPLICATE_VIDEO_ASPECT_RATIO,
+)
 
 
 def _ensure_token():
@@ -15,12 +21,17 @@ def _ensure_token():
 def start_image_to_video(image_url: str, prompt: str = "") -> str:
     """
     Start an image-to-video prediction. Returns the prediction id.
-    Model: stable-video-diffusion img2vid-xt-optimized (image URL input).
+    Default model: Google Veo 3.1 (prompt required; image optional for img-to-video).
     """
     _ensure_token()
-    input_params = {"image": image_url}
-    if prompt:
-        input_params["prompt"] = prompt
+    # Veo 3.1 / 3.1 Fast: prompt required; image for image-to-video; optional resolution, duration, aspect_ratio
+    input_params = {
+        "prompt": prompt or "Smooth motion, cinematic quality",
+        "image": image_url,
+        "resolution": REPLICATE_VIDEO_RESOLUTION,
+        "duration": REPLICATE_VIDEO_DURATION,
+        "aspect_ratio": REPLICATE_VIDEO_ASPECT_RATIO,
+    }
     prediction = replicate.predictions.create(
         version=REPLICATE_IMAGE_TO_VIDEO_VERSION,
         input=input_params,

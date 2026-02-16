@@ -32,7 +32,10 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `SUPABASE_SERVICE_ROLE_KEY` – Supabase service role key  
 - `SUPABASE_BUCKET_PRODUCT_IMAGES` – (optional) Storage bucket name, default `product-images`  
 - `REPLICATE_API_TOKEN` – Replicate API token  
-- `REPLICATE_IMAGE_TO_VIDEO_VERSION` – (optional) Model version, default aicapcut SVD img2vid  
+- `REPLICATE_IMAGE_TO_VIDEO_VERSION` – (optional) Model, default `google/veo-3.1-fast`  
+- `REPLICATE_VIDEO_RESOLUTION` – (optional) `720p` or `1080p`, default `720p`  
+- `REPLICATE_VIDEO_DURATION` – (optional) Seconds: `4`, `6`, or `8`, default `8`  
+- `REPLICATE_VIDEO_ASPECT_RATIO` – (optional) `16:9` or `9:16`, default `9:16`  
 - `JWT_SECRET` – Secret used to sign login JWTs  
 
 ## API
