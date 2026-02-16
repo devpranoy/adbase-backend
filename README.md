@@ -44,6 +44,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - **POST /api/auth/login** – Body: `{ "username", "password" }`. Returns `{ "token": "..." }`.  
 - **POST /api/jobs/upload** – Auth: Bearer token. Form: `image` (file), `prompt` (optional). Returns `job_id`, `image_url`, `status`.  
 - **POST /api/jobs/<job_id>/start** – Auth: Bearer. Starts Replicate image-to-video job. Returns `job_id`, `prediction_id`, `status`.  
+- **GET /api/jobs** – Auth: Bearer. List current user's generations (newest first). Query: `limit` (default 50, max 100), `offset` (default 0). Returns `{ "jobs": [...], "total": N }` with `id`, `status`, `image_url`, `prompt`, `output_video_url`, `created_at` per job.  
 - **GET /api/jobs/<job_id>** – Auth: Bearer. Returns job status and, when done, `output_video_url`.  
 - **GET /api/jobs/<job_id>/result** – Auth: Bearer. Returns `{ "output_video_url": "..." }` when ready, or 202 while processing.  
 

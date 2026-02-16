@@ -7,6 +7,7 @@ from supabase_client import (
     upload_product_image,
     create_job,
     get_job,
+    list_jobs,
     update_job_prediction,
     update_job_result,
 )
@@ -34,6 +35,22 @@ def login():
 
 
 # --- Jobs (all require Bearer token) ---
+
+
+@api_bp.get("/api/jobs")
+@require_auth
+def list_user_jobs():
+    """GET /api/jobs: list current user's generations (newest first). Query: limit (default 50), offset (default 0)."""
+    try:
+        limit = min(int(request.args.get("limit", 50)), 100)
+    except (TypeError, ValueError):
+        limit = 50
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+    except (TypeError, ValueError):
+        offset = 0
+    jobs = list_jobs(str(g.user_id), limit=limit, offset=offset)
+    return jsonify({"jobs": jobs, "total": len(jobs)})
 
 
 @api_bp.post("/api/jobs/upload")

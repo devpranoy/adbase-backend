@@ -60,6 +60,20 @@ def get_job(job_id: str, user_id: str) -> dict | None:
     return r.data[0]
 
 
+def list_jobs(user_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
+    """Return jobs for user_id, newest first. Optional limit (default 50) and offset for pagination."""
+    client = get_client()
+    r = (
+        client.table("jobs")
+        .select("id, status, image_url, prompt, output_video_url, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
+        .execute()
+    )
+    return r.data or []
+
+
 def update_job_prediction(job_id: str, user_id: str, replicate_prediction_id: str) -> None:
     """Set replicate_prediction_id and status=processing."""
     client = get_client()
