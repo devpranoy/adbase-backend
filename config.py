@@ -22,7 +22,7 @@ REPLICATE_TTS_VOICE = os.environ.get("REPLICATE_TTS_VOICE", "Rachel").strip()
 REPLICATE_TTS_LANGUAGE_CODE = os.environ.get("REPLICATE_TTS_LANGUAGE_CODE", "en").strip()
 REPLICATE_FABRIC_MODEL = os.environ.get("REPLICATE_FABRIC_MODEL", "veed/fabric-1.0").strip()
 REPLICATE_FABRIC_RESOLUTION = os.environ.get("REPLICATE_FABRIC_RESOLUTION", "720p").strip()
-REPLICATE_FFMPEG_MODEL = os.environ.get("REPLICATE_FFMPEG_MODEL", "foixasoftware/ffmpeg").strip()
+REPLICATE_FFMPEG_MODEL = os.environ.get("REPLICATE_FFMPEG_MODEL", "idan054/better-video-merge").strip()
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "").strip()
 

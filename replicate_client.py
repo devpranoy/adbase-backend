@@ -201,18 +201,23 @@ def generate_ugc_hook_video(actor_image_url: str, audio_url: str, prompt: str = 
 
 def stitch_videos(video_urls: list[str]) -> str:
     """
-    Stitch videos into one output using ffmpeg model on Replicate. Returns output video URL.
+    Stitch videos into one output using merge model on Replicate. Returns output video URL.
     """
     _ensure_token()
     clean_urls = [u.strip() for u in (video_urls or []) if isinstance(u, str) and u.strip()]
     if len(clean_urls) < 2:
         raise ValueError("At least 2 video URLs are required for stitching")
 
+    # Expected order for downstream ad flow: UGC hook first, product video second.
+    first_video = clean_urls[0]
+    second_video = clean_urls[1]
+
     candidate_inputs = [
-        {"videos": clean_urls},
-        {"video_urls": clean_urls},
-        {"video1": clean_urls[0], "video2": clean_urls[1]},
-        {"input_video_1": clean_urls[0], "input_video_2": clean_urls[1]},
+        {"video_files": [first_video, second_video], "keep_audio": True},
+        {"videos": [first_video, second_video], "keep_audio": True},
+        {"video_urls": [first_video, second_video], "keep_audio": True},
+        {"video1": first_video, "video2": second_video, "keep_audio": True},
+        {"input_video_1": first_video, "input_video_2": second_video, "keep_audio": True},
     ]
     output = _run_model_with_fallback_inputs(REPLICATE_FFMPEG_MODEL, candidate_inputs)
     output_url = _extract_output_url(output)

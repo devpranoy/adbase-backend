@@ -44,14 +44,14 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `REPLICATE_TTS_LANGUAGE_CODE` – (optional) Language code for TTS, default `en`  
 - `REPLICATE_FABRIC_MODEL` – (optional) UGC talking-head model, default `veed/fabric-1.0`  
 - `REPLICATE_FABRIC_RESOLUTION` – (optional) Fabric output resolution, default `720p`  
-- `REPLICATE_FFMPEG_MODEL` – (optional) Stitch model, default `foixasoftware/ffmpeg`  
+- `REPLICATE_FFMPEG_MODEL` – (optional) Stitch model, default `idan054/better-video-merge`  
 - `JWT_SECRET` – Secret used to sign login JWTs  
 - `CORS_ORIGINS` – (optional) Comma-separated allowed origins for CORS; default includes localhost variants, `https://tryadbase.com`, and `https://www.tryadbase.com`. Override to add or change origins.
 
 ## API
 
 - **POST /api/auth/login** – Body: `{ "username", "password" }`. Returns `{ "token": "..." }`.  
-- **GET /api/voices/elevenlabs-v3** – Auth: Bearer. Returns supported ElevenLabs voices for Replicate v3 selector UI (`name` + `voice_id`) and `default_voice`.
+- **GET /api/voices/elevenlabs-v3** – Auth: Bearer. Returns the Replicate-allowed ElevenLabs v3 voices for selector UI and `default_voice`.
 - **POST /api/jobs/upload** – Auth: Bearer token. Form: `image` (file), `prompt` (optional). Returns `job_id`, `image_url`, `status`.  
 - **POST /api/jobs/upload-full** – Auth: Bearer token. Multipart form for full flow:
   - `product_images` (one or more files; fallback field `image`)
@@ -76,7 +76,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - **POST /api/jobs/<job_id>/audio** – Auth: Bearer. Generate TTS audio via Replicate `elevenlabs/v3`, then persist to Supabase Storage and return permanent URL.
   - JSON:
     - `text` (string, optional if `use_agents=true`)
-    - `voice` (string, optional; pass supported voice `name` or `voice_id`)
+    - `voice` (string, optional; pass supported `name` from voices API; legacy IDs for overlapping voices are also accepted)
     - `language_code` (string, optional)
     - `speed`, `stability`, `similarity_boost`, `style` (number, optional)
     - `use_agents` (bool, optional): derive `text` from ScriptWriter hook
@@ -87,14 +87,15 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
   2. ElevenLabs v3 TTS on Replicate (persist audio)
   3. Fabric UGC hook generation from actor image + audio (persist hook video)
   4. Veo product video generation from story prompt + product image (persist product video)
-  5. FFmpeg stitching of hook + product video (persist final video and update `jobs.output_video_url`)
+  5. Video merge of hook + product video using `idan054/better-video-merge` (persist final video and update `jobs.output_video_url`)
   - Optional JSON:
     - `prompt_override`, `product_info`
     - `actor_image_url`, `product_image_urls`
-    - `voice` (name or voice_id), `language_code`, `speed`, `stability`, `similarity_boost`, `style`
+    - `voice` (supported name), `language_code`, `speed`, `stability`, `similarity_boost`, `style`
     - `use_agents` (default `true`), `tone`, `duration_target_sec`
     - `hook_text`, `story_prompt`, `ugc_prompt` (manual overrides)
   - Returns `output_video_url`, per-step artifact URLs, and `manifest_url`.
+  - Merge stage always enforces `keep_audio=true`.
 - **GET /api/jobs/<job_id>/pipeline** – Auth: Bearer. Returns stored pipeline manifest/artifacts.
 - **GET /api/jobs** – Auth: Bearer. List current user's generations (newest first). Query: `limit` (default 50, max 100), `offset` (default 0). Returns `{ "jobs": [...], "total": N }` with `id`, `status`, `image_url`, `prompt`, `output_video_url`, `created_at` per job.  
 - **GET /api/jobs/<job_id>** – Auth: Bearer. Returns job status and, when done, `output_video_url`.  

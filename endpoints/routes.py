@@ -518,6 +518,7 @@ def start_full_job(job_id: str):
             "storage_url": product_video_url,
         }
 
+        # Merge order is intentional: UGC hook first, product video second.
         replicate_final_video_url = stitch_videos([hook_video_url, product_video_url])
         final_video_url = persist_replicate_video(replicate_final_video_url, job_id)
         artifacts["final_video"] = {
