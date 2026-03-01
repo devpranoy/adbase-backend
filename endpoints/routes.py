@@ -485,16 +485,19 @@ def start_full_job(job_id: str):
         if not story_prompt:
             story_prompt = source_prompt
 
-        replicate_audio_url = generate_tts_audio(
-            prompt=hook_text,
-            voice=voice,
-            language_code=(data.get("language_code") or "").strip() or None,
-            speed=_as_float(data.get("speed")),
-            stability=_as_float(data.get("stability")),
-            similarity_boost=_as_float(data.get("similarity_boost")),
-            style=_as_float(data.get("style")),
-        )
-        audio_url = persist_replicate_audio(replicate_audio_url, job_id, variant="hook")
+        try:
+            replicate_audio_url = generate_tts_audio(
+                prompt=hook_text,
+                voice=voice,
+                language_code=(data.get("language_code") or "").strip() or None,
+                speed=_as_float(data.get("speed")),
+                stability=_as_float(data.get("stability")),
+                similarity_boost=_as_float(data.get("similarity_boost")),
+                style=_as_float(data.get("style")),
+            )
+            audio_url = persist_replicate_audio(replicate_audio_url, job_id, variant="hook")
+        except Exception as e:
+            raise RuntimeError(f"[tts_audio] {e}") from e
         artifacts["audio"] = {
             "replicate_url": replicate_audio_url,
             "storage_url": audio_url,
@@ -504,23 +507,32 @@ def start_full_job(job_id: str):
             (data.get("ugc_prompt") or "").strip()
             or "Generate a realistic UGC talking-head clip synced to the provided voice audio."
         )
-        replicate_hook_video_url = generate_ugc_hook_video(actor_image_url, audio_url, prompt=ugc_prompt)
-        hook_video_url = persist_replicate_video(replicate_hook_video_url, job_id, variant="ugc-hook")
+        try:
+            replicate_hook_video_url = generate_ugc_hook_video(actor_image_url, audio_url, prompt=ugc_prompt)
+            hook_video_url = persist_replicate_video(replicate_hook_video_url, job_id, variant="ugc-hook")
+        except Exception as e:
+            raise RuntimeError(f"[ugc_hook_video] {e}") from e
         artifacts["ugc_hook_video"] = {
             "replicate_url": replicate_hook_video_url,
             "storage_url": hook_video_url,
         }
 
-        replicate_product_video_url = run_image_to_video(product_image_urls[0], story_prompt)
-        product_video_url = persist_replicate_video(replicate_product_video_url, job_id, variant="product")
+        try:
+            replicate_product_video_url = run_image_to_video(product_image_urls[0], story_prompt)
+            product_video_url = persist_replicate_video(replicate_product_video_url, job_id, variant="product")
+        except Exception as e:
+            raise RuntimeError(f"[product_video] {e}") from e
         artifacts["product_video"] = {
             "replicate_url": replicate_product_video_url,
             "storage_url": product_video_url,
         }
 
-        # Merge order is intentional: UGC hook first, product video second.
-        replicate_final_video_url = stitch_videos([hook_video_url, product_video_url])
-        final_video_url = persist_replicate_video(replicate_final_video_url, job_id)
+        try:
+            # Merge order is intentional: UGC hook first, product video second.
+            replicate_final_video_url = stitch_videos([hook_video_url, product_video_url])
+            final_video_url = persist_replicate_video(replicate_final_video_url, job_id)
+        except Exception as e:
+            raise RuntimeError(f"[video_merge] {e}") from e
         artifacts["final_video"] = {
             "replicate_url": replicate_final_video_url,
             "storage_url": final_video_url,
