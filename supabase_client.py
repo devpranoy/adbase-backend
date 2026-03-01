@@ -63,7 +63,7 @@ def upload_video(
     client = get_client()
     storage = client.storage.from_(SUPABASE_BUCKET_VIDEOS)
     path = _with_variant(job_id, variant, ext)
-    storage.upload(path, video_bytes, file_options={"content-type": content_type, "upsert": True})
+    storage.upload(path, video_bytes, file_options={"content-type": content_type, "upsert": "true"})
     return storage.get_public_url(path)
 
 
@@ -99,7 +99,7 @@ def upload_audio(
     client = get_client()
     storage = client.storage.from_(SUPABASE_BUCKET_AUDIO)
     path = _with_variant(job_id, variant, ext)
-    storage.upload(path, audio_bytes, file_options={"content-type": content_type, "upsert": True})
+    storage.upload(path, audio_bytes, file_options={"content-type": content_type, "upsert": "true"})
     return storage.get_public_url(path)
 
 
@@ -146,7 +146,7 @@ def save_pipeline_manifest(job_id: str, manifest: dict) -> str:
     storage = client.storage.from_(SUPABASE_BUCKET_VIDEOS)
     path = f"manifests/{job_id}.json"
     payload = json.dumps(manifest, ensure_ascii=True).encode("utf-8")
-    storage.upload(path, payload, file_options={"content-type": "application/json", "upsert": True})
+    storage.upload(path, payload, file_options={"content-type": "application/json", "upsert": "true"})
     return storage.get_public_url(path)
 
 
