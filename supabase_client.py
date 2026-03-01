@@ -1,5 +1,8 @@
 """Supabase client and storage helpers."""
+import json
+import os
 import urllib.request
+from urllib.parse import urlparse
 
 from supabase import create_client
 
@@ -8,6 +11,7 @@ from config import (
     SUPABASE_SERVICE_ROLE_KEY,
     SUPABASE_BUCKET_PRODUCT_IMAGES,
     SUPABASE_BUCKET_VIDEOS,
+    SUPABASE_BUCKET_AUDIO,
 )
 
 _client = None
@@ -36,19 +40,70 @@ def upload_product_image(file_bytes: bytes, filename: str, content_type: str = "
     return storage.get_public_url(path)
 
 
-def upload_video(video_bytes: bytes, job_id: str) -> str:
+def _with_variant(job_id: str, variant: str | None, ext: str) -> str:
+    safe_variant = (variant or "").strip()
+    if safe_variant:
+        return f"completed/{job_id}-{safe_variant}.{ext}"
+    return f"completed/{job_id}.{ext}"
+
+
+def upload_video(
+    video_bytes: bytes,
+    job_id: str,
+    *,
+    variant: str | None = None,
+    ext: str = "mp4",
+    content_type: str = "video/mp4",
+) -> str:
     """
     Upload a video to Supabase Storage (product-videos bucket) and return its public URL.
-    Path: completed/<job_id>.mp4. Bucket must be public.
+    Path: completed/<job_id>-<variant>.<ext> (or completed/<job_id>.<ext> when variant omitted).
+    Bucket must be public.
     """
     client = get_client()
     storage = client.storage.from_(SUPABASE_BUCKET_VIDEOS)
-    path = f"completed/{job_id}.mp4"
-    storage.upload(path, video_bytes, file_options={"content-type": "video/mp4"})
+    path = _with_variant(job_id, variant, ext)
+    storage.upload(path, video_bytes, file_options={"content-type": content_type, "upsert": True})
     return storage.get_public_url(path)
 
 
-def persist_replicate_video(replicate_video_url: str, job_id: str) -> str:
+def _guess_audio_extension(content_type: str, source_url: str) -> str:
+    if content_type == "audio/wav":
+        return "wav"
+    if content_type == "audio/ogg":
+        return "ogg"
+    if content_type == "audio/flac":
+        return "flac"
+    if content_type in {"audio/mpeg", "audio/mp3"}:
+        return "mp3"
+    path = urlparse(source_url).path or ""
+    ext = os.path.splitext(path)[1].lower().lstrip(".")
+    if ext in {"mp3", "wav", "ogg", "flac", "m4a"}:
+        return ext
+    return "mp3"
+
+
+def upload_audio(
+    audio_bytes: bytes,
+    job_id: str,
+    ext: str = "mp3",
+    content_type: str = "audio/mpeg",
+    *,
+    variant: str | None = None,
+) -> str:
+    """
+    Upload an audio file to Supabase Storage (product-audio bucket) and return its public URL.
+    Path: completed/<job_id>-<variant>.<ext> (or completed/<job_id>.<ext> when variant omitted).
+    Bucket must be public.
+    """
+    client = get_client()
+    storage = client.storage.from_(SUPABASE_BUCKET_AUDIO)
+    path = _with_variant(job_id, variant, ext)
+    storage.upload(path, audio_bytes, file_options={"content-type": content_type, "upsert": True})
+    return storage.get_public_url(path)
+
+
+def persist_replicate_video(replicate_video_url: str, job_id: str, *, variant: str | None = None) -> str:
     """
     Download video from Replicate URL and upload to our storage. Returns our permanent URL.
     Use this when a job succeeds so the link does not expire after 1 hour.
@@ -59,7 +114,60 @@ def persist_replicate_video(replicate_video_url: str, job_id: str) -> str:
     )
     with urllib.request.urlopen(req, timeout=120) as resp:
         video_bytes = resp.read()
-    return upload_video(video_bytes, job_id)
+        content_type = (resp.headers.get_content_type() or "video/mp4").lower()
+    ext = "mp4"
+    path_ext = os.path.splitext(urlparse(replicate_video_url).path or "")[1].lower().lstrip(".")
+    if path_ext in {"mp4", "mov", "webm"}:
+        ext = path_ext
+    return upload_video(video_bytes, job_id, variant=variant, ext=ext, content_type=content_type)
+
+
+def persist_replicate_audio(replicate_audio_url: str, job_id: str, *, variant: str | None = None) -> str:
+    """
+    Download audio from Replicate URL and upload to our storage. Returns our permanent URL.
+    """
+    req = urllib.request.Request(
+        replicate_audio_url,
+        headers={"User-Agent": "AdbaseBackend/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        audio_bytes = resp.read()
+        content_type = (resp.headers.get_content_type() or "audio/mpeg").lower()
+    ext = _guess_audio_extension(content_type, replicate_audio_url)
+    return upload_audio(audio_bytes, job_id, ext=ext, content_type=content_type, variant=variant)
+
+
+def save_pipeline_manifest(job_id: str, manifest: dict) -> str:
+    """
+    Save pipeline artifact metadata to videos bucket under manifests/<job_id>.json.
+    Returns public URL.
+    """
+    client = get_client()
+    storage = client.storage.from_(SUPABASE_BUCKET_VIDEOS)
+    path = f"manifests/{job_id}.json"
+    payload = json.dumps(manifest, ensure_ascii=True).encode("utf-8")
+    storage.upload(path, payload, file_options={"content-type": "application/json", "upsert": True})
+    return storage.get_public_url(path)
+
+
+def get_pipeline_manifest(job_id: str) -> dict | None:
+    """
+    Read pipeline artifact metadata from videos bucket manifest.
+    """
+    client = get_client()
+    storage = client.storage.from_(SUPABASE_BUCKET_VIDEOS)
+    path = f"manifests/{job_id}.json"
+    try:
+        signed = storage.create_signed_url(path, 60)
+        signed_url = (signed or {}).get("signedURL")
+        if not signed_url:
+            return None
+        if signed_url.startswith("/"):
+            signed_url = f"{SUPABASE_URL.rstrip('/')}{signed_url}"
+        with urllib.request.urlopen(signed_url, timeout=20) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
 
 
 # --- Jobs table helpers ---
@@ -119,3 +227,9 @@ def update_job_result(job_id: str, user_id: str, output_video_url: str | None, s
     if output_video_url is not None:
         payload["output_video_url"] = output_video_url
     client.table("jobs").update(payload).eq("id", job_id).eq("user_id", user_id).execute()
+
+
+def update_job_status(job_id: str, user_id: str, status: str) -> None:
+    """Set status field for a job."""
+    client = get_client()
+    client.table("jobs").update({"status": status}).eq("id", job_id).eq("user_id", user_id).execute()

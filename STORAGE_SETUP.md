@@ -30,7 +30,23 @@ Completed videos are copied from Replicate into your storage so links don’t ex
 4. Click **Create bucket**.
 
 Videos are stored under `completed/<job_id>.mp4`.
+Full pipeline artifacts may also use variant paths like:
+- `completed/<job_id>-ugc-hook.mp4`
+- `completed/<job_id>-product.mp4`
+- `manifests/<job_id>.json`
 
 ## 4. Verify
 
 After the buckets exist and are public, the Flask upload endpoint will store images under `uploads/<filename>` and return the public URL. Replicate will use that URL as the image input. When a job succeeds, the backend downloads the video from Replicate and uploads it to `product-videos`; the database is updated with that permanent URL.
+
+## 5. Create the audio bucket (for persisted TTS outputs)
+
+TTS audio generated via Replicate (ElevenLabs v3) is also copied into your storage so links remain permanent.
+
+1. In **Storage**, click **New bucket** again.
+2. **Name:** `product-audio` (or set env `SUPABASE_BUCKET_AUDIO` to match).
+3. **Public bucket:** turn **ON** so the app can return public audio URLs.
+4. Click **Create bucket**.
+
+Audio is stored under `completed/<job_id>.<ext>`.
+Full pipeline hook audio is stored under `completed/<job_id>-hook.<ext>`.
