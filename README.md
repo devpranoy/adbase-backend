@@ -44,7 +44,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `REPLICATE_TTS_LANGUAGE_CODE` – (optional) Language code for TTS, default `en`  
 - `REPLICATE_FABRIC_MODEL` – (optional) UGC talking-head model, default `veed/fabric-1.0`  
 - `REPLICATE_FABRIC_RESOLUTION` – (optional) Fabric output resolution, default `720p`  
-- `REPLICATE_FFMPEG_MODEL` – (optional) Stitch model, default `idan054/better-video-merge`  
+- `REPLICATE_FFMPEG_MODEL` – (optional) Stitch model, default `idan054/better-video-merge:6bda9eb61c16dedaa6804792a252cf7a7c260a5c2bf3ac479adab2d3a4e983ad`  
 - `JWT_SECRET` – Secret used to sign login JWTs  
 - `CORS_ORIGINS` – (optional) Comma-separated allowed origins for CORS; default includes localhost variants, `https://tryadbase.com`, and `https://www.tryadbase.com`. Override to add or change origins.
 
@@ -87,7 +87,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
   2. ElevenLabs v3 TTS on Replicate (persist audio)
   3. Fabric UGC hook generation from actor image + audio (persist hook video)
   4. Veo product video generation from story prompt + product image (persist product video)
-  5. Video merge of hook + product video using `idan054/better-video-merge` (persist final video and update `jobs.output_video_url`)
+  5. Video merge of hook + product video using `idan054/better-video-merge:6bda9eb61c16dedaa6804792a252cf7a7c260a5c2bf3ac479adab2d3a4e983ad` (persist final video and update `jobs.output_video_url`)
   - Optional JSON:
     - `prompt_override`, `product_info`
     - `actor_image_url`, `product_image_urls`
