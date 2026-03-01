@@ -37,6 +37,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `REPLICATE_VIDEO_RESOLUTION` – (optional) `720p` or `1080p`, default `720p`  
 - `REPLICATE_VIDEO_DURATION` – (optional) Seconds: `4`, `6`, or `8`, default `8`  
 - `REPLICATE_VIDEO_ASPECT_RATIO` – (optional) `16:9` or `9:16`, default `9:16`  
+- `REPLICATE_TEXT_MODEL` – (optional) Replicate LLM model for script/story agents, default `meta/meta-llama-3-70b-instruct`  
 - `JWT_SECRET` – Secret used to sign login JWTs  
 - `CORS_ORIGINS` – (optional) Comma-separated allowed origins for CORS; default includes localhost variants, `https://tryadbase.com`, and `https://www.tryadbase.com`. Override to add or change origins.
 
@@ -44,7 +45,19 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 
 - **POST /api/auth/login** – Body: `{ "username", "password" }`. Returns `{ "token": "..." }`.  
 - **POST /api/jobs/upload** – Auth: Bearer token. Form: `image` (file), `prompt` (optional). Returns `job_id`, `image_url`, `status`.  
-- **POST /api/jobs/<job_id>/start** – Auth: Bearer. Starts Replicate image-to-video job. Returns `job_id`, `prediction_id`, `status`.  
+- **POST /api/jobs/<job_id>/start** – Auth: Bearer. Starts Replicate image-to-video job.  
+  - Backward compatible: no body required (uses saved `prompt` exactly like before).
+  - Optional JSON body:  
+    - `use_agents` (bool): generate hook + story prompt and use story prompt for video generation  
+    - `prompt_override` (string): override job prompt for this run only  
+    - `tone` (string): tone hint for agent generation (default `conversational`)  
+    - `duration_target_sec` (int): hook duration target (default `5`)  
+  - Returns `job_id`, `prediction_id`, `status`, `used_prompt`, and optional `agent_outputs`.
+- **POST /api/agents/generate** – Auth: Bearer. JSON `{ prompt, image_url?, tone?, duration_target_sec? }`. Returns:
+  - `script_writer` (UGC hook script output)
+  - `story_writer` (video generation prompt output)
+  - `meta` (provider/model info)
+- **POST /api/jobs/<job_id>/agents** – Auth: Bearer. Generate agent outputs based on existing job prompt/image. Optional `prompt_override`, `tone`, `duration_target_sec`.
 - **GET /api/jobs** – Auth: Bearer. List current user's generations (newest first). Query: `limit` (default 50, max 100), `offset` (default 0). Returns `{ "jobs": [...], "total": N }` with `id`, `status`, `image_url`, `prompt`, `output_video_url`, `created_at` per job.  
 - **GET /api/jobs/<job_id>** – Auth: Bearer. Returns job status and, when done, `output_video_url`.  
 - **GET /api/jobs/<job_id>/result** – Auth: Bearer. Returns `{ "output_video_url": "..." }` when ready, or 202 while processing.  

@@ -2,6 +2,7 @@ import uuid
 
 from flask import Blueprint, g, jsonify, request
 
+from ad_agents import generate_ad_agents
 from auth import require_auth, verify_user, issue_jwt
 from supabase_client import (
     upload_product_image,
@@ -94,16 +95,94 @@ def start_job(job_id: str):
         return jsonify({"error": "Job not found"}), 404
     if job["status"] != "draft":
         return jsonify({"error": "Job already started or finished", "status": job["status"]}), 400
+    body = request.get_json(silent=True) or {}
+    prompt_override = (body.get("prompt_override") or "").strip()
+    use_agents = bool(body.get("use_agents", False))
+    tone = (body.get("tone") or "conversational").strip()
+    duration_target_sec = body.get("duration_target_sec", 5)
+    effective_prompt = prompt_override or (job.get("prompt") or "")
+    agent_outputs = None
+    if use_agents:
+        try:
+            agent_outputs = generate_ad_agents(
+                user_prompt=effective_prompt,
+                image_url=job.get("image_url") or "",
+                tone=tone,
+                duration_target_sec=duration_target_sec,
+            )
+            effective_prompt = (
+                ((agent_outputs.get("story_writer") or {}).get("video_prompt") or "").strip()
+                or effective_prompt
+            )
+        except Exception as e:
+            return jsonify({"error": "Failed to generate agent outputs", "message": str(e)}), 500
     try:
-        prediction_id = start_image_to_video(job["image_url"], job.get("prompt") or "")
+        prediction_id = start_image_to_video(job["image_url"], effective_prompt)
         update_job_prediction(job_id, str(g.user_id), prediction_id)
     except Exception as e:
         return jsonify({"error": "Failed to start job", "message": str(e)}), 500
-    return jsonify({
+    response = {
         "job_id": job_id,
         "prediction_id": prediction_id,
         "status": "processing",
-    })
+        "used_prompt": effective_prompt,
+    }
+    if agent_outputs:
+        response["agent_outputs"] = agent_outputs
+    return jsonify(response)
+
+
+@api_bp.post("/api/agents/generate")
+@require_auth
+def generate_agents():
+    """POST /api/agents/generate: generate hook script and story prompt from user prompt."""
+    data = request.get_json(silent=True) or {}
+    user_prompt = (data.get("prompt") or "").strip()
+    image_url = (data.get("image_url") or "").strip()
+    tone = (data.get("tone") or "conversational").strip()
+    duration_target_sec = data.get("duration_target_sec", 5)
+    if not user_prompt:
+        return jsonify({"error": "Missing 'prompt'"}), 400
+    try:
+        outputs = generate_ad_agents(
+            user_prompt=user_prompt,
+            image_url=image_url,
+            tone=tone,
+            duration_target_sec=duration_target_sec,
+        )
+    except Exception as e:
+        return jsonify({"error": "Agent generation failed", "message": str(e)}), 500
+    return jsonify(outputs)
+
+
+@api_bp.post("/api/jobs/<job_id>/agents")
+@require_auth
+def generate_job_agents(job_id: str):
+    """POST /api/jobs/<job_id>/agents: generate hook/story outputs for an existing job."""
+    try:
+        uuid.UUID(job_id)
+    except ValueError:
+        return jsonify({"error": "Invalid job_id"}), 400
+    job = get_job(job_id, str(g.user_id))
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    data = request.get_json(silent=True) or {}
+    prompt_override = (data.get("prompt_override") or "").strip()
+    tone = (data.get("tone") or "conversational").strip()
+    duration_target_sec = data.get("duration_target_sec", 5)
+    user_prompt = prompt_override or (job.get("prompt") or "").strip()
+    if not user_prompt:
+        return jsonify({"error": "Job has no prompt and no prompt_override provided"}), 400
+    try:
+        outputs = generate_ad_agents(
+            user_prompt=user_prompt,
+            image_url=job.get("image_url") or "",
+            tone=tone,
+            duration_target_sec=duration_target_sec,
+        )
+    except Exception as e:
+        return jsonify({"error": "Agent generation failed", "message": str(e)}), 500
+    return jsonify({"job_id": job_id, "agent_outputs": outputs})
 
 
 @api_bp.get("/api/jobs/<job_id>")

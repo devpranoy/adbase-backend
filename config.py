@@ -18,3 +18,10 @@ REPLICATE_VIDEO_DURATION = int(os.environ.get("REPLICATE_VIDEO_DURATION", "8") o
 REPLICATE_VIDEO_ASPECT_RATIO = os.environ.get("REPLICATE_VIDEO_ASPECT_RATIO", "9:16").strip()
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "").strip()
+
+# Optional Replicate LLM model for script/story agent generation.
+# If unset or call fails, backend uses deterministic local generation fallback.
+REPLICATE_TEXT_MODEL = os.environ.get(
+    "REPLICATE_TEXT_MODEL",
+    "meta/meta-llama-3-70b-instruct",
+).strip()
