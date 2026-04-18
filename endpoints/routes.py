@@ -242,6 +242,38 @@ def _normalize_uuid_param(value) -> str:
     return str(uuid.UUID(str(value)))
 
 
+def _artifact_storage_url(artifact) -> str:
+    if not isinstance(artifact, dict):
+        return ""
+    return str(artifact.get("storage_url") or "").strip()
+
+
+def _save_pipeline_progress(
+    *,
+    job_id: str,
+    user_id: str,
+    status: str,
+    current_stage: str,
+    inputs: dict,
+    agent_outputs,
+    artifacts: dict,
+    error: str | None = None,
+) -> str:
+    manifest = {
+        "job_id": job_id,
+        "user_id": user_id,
+        "status": status,
+        "current_stage": current_stage,
+        "inputs": inputs,
+        "agent_outputs": agent_outputs,
+        "artifacts": artifacts,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if error:
+        manifest["error"] = error
+    return save_pipeline_manifest(job_id, manifest)
+
+
 def _swagger_ui_html() -> str:
     css_url = f"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/{SWAGGER_UI_VERSION}/swagger-ui.min.css"
     bundle_url = f"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/{SWAGGER_UI_VERSION}/swagger-ui-bundle.min.js"
@@ -866,14 +898,36 @@ def start_full_job(job_id):
     job = get_job(job_id, str(g.user_id))
     if not job:
         return jsonify({"error": "Job not found"}), 404
-    if job["status"] == "processing":
-        return jsonify({"error": "Job already processing", "status": job["status"]}), 400
 
     data = request.get_json(silent=True) or {}
-    existing_manifest = get_pipeline_manifest(job_id) or {}
-    manifest_inputs = (existing_manifest.get("inputs") or {}) if isinstance(existing_manifest, dict) else {}
+    force_restart = _as_bool(data.get("force_restart"), False)
+    resume_pipeline = _as_bool(data.get("resume"), True)
 
-    raw_prompt = (data.get("prompt_override") or "").strip() or (job.get("prompt") or "").strip()
+    if job["status"] == "processing" and not force_restart:
+        return jsonify({
+            "error": "Job already processing",
+            "status": job["status"],
+            "message": (
+                "If the earlier request timed out but you want to continue from saved artifacts, "
+                "call this endpoint again with {\"force_restart\": true, \"resume\": true}."
+            ),
+        }), 400
+
+    existing_manifest = get_pipeline_manifest(job_id) or {}
+    if not resume_pipeline or not isinstance(existing_manifest, dict):
+        existing_manifest = {}
+    manifest_inputs = (existing_manifest.get("inputs") or {}) if isinstance(existing_manifest, dict) else {}
+    existing_artifacts = (
+        dict(existing_manifest.get("artifacts") or {})
+        if isinstance(existing_manifest.get("artifacts"), dict)
+        else {}
+    )
+
+    raw_prompt = (
+        (data.get("prompt_override") or "").strip()
+        or (manifest_inputs.get("prompt") or "").strip()
+        or (job.get("prompt") or "").strip()
+    )
     voice_raw = (data.get("voice") or "").strip() or (manifest_inputs.get("voice") or "").strip()
     if voice_raw:
         try:
@@ -936,17 +990,54 @@ def start_full_job(job_id):
     duration_target_sec = data.get("duration_target_sec", 5)
     source_prompt = _build_agent_prompt(raw_prompt, product_info)
 
-    artifacts = {}
-    agent_outputs = None
-    hook_text = (data.get("hook_text") or "").strip()
-    story_prompt = (data.get("story_prompt") or "").strip()
+    artifacts = dict(existing_artifacts)
+    agent_outputs = existing_manifest.get("agent_outputs") if isinstance(existing_manifest, dict) else None
+    hook_text = (data.get("hook_text") or "").strip() or (manifest_inputs.get("hook_text") or "").strip()
+    story_prompt = (data.get("story_prompt") or "").strip() or (manifest_inputs.get("story_prompt") or "").strip()
+    ugc_prompt = (
+        (data.get("ugc_prompt") or "").strip()
+        or (manifest_inputs.get("ugc_prompt") or "").strip()
+        or "Generate a realistic UGC talking-head clip synced to the provided voice audio."
+    )
+    current_stage = "starting"
+    manifest_url = ""
+
+    def _persist_progress(status: str, stage: str, error: str | None = None) -> str:
+        nonlocal manifest_url
+        manifest_url = _save_pipeline_progress(
+            job_id=job_id,
+            user_id=str(g.user_id),
+            status=status,
+            current_stage=stage,
+            inputs={
+                "prompt": raw_prompt,
+                "source_prompt": source_prompt,
+                "tone": tone,
+                "duration_target_sec": duration_target_sec,
+                "voice": voice,
+                "product_info": product_info,
+                "actor_variant_id": actor_variant_id or None,
+                "actor_image_url": actor_image_url,
+                "product_image_urls": product_image_urls,
+                "hook_text": hook_text or None,
+                "story_prompt": story_prompt or None,
+                "ugc_prompt": ugc_prompt or None,
+            },
+            agent_outputs=agent_outputs,
+            artifacts=artifacts,
+            error=error,
+        )
+        return manifest_url
 
     try:
         update_job_status(job_id, str(g.user_id), "processing")
         if actor_variant_id:
             update_job_actor_variant(job_id, str(g.user_id), actor_variant_id)
+        _persist_progress("processing", current_stage)
 
-        if use_agents:
+        if use_agents and not agent_outputs:
+            current_stage = "agents_generation"
+            _persist_progress("processing", current_stage)
             agent_outputs = generate_ad_agents(
                 user_prompt=source_prompt,
                 image_url=product_image_urls[0],
@@ -955,110 +1046,98 @@ def start_full_job(job_id):
             )
             hook_text = hook_text or (((agent_outputs.get("script_writer") or {}).get("hook_text")) or "").strip()
             story_prompt = story_prompt or (((agent_outputs.get("story_writer") or {}).get("video_prompt")) or "").strip()
+            _persist_progress("processing", "agents_completed")
 
         if not hook_text:
             hook_text = source_prompt
         if not story_prompt:
             story_prompt = source_prompt
+        _persist_progress("processing", "prompts_ready")
 
-        try:
-            replicate_audio_url = generate_tts_audio(
-                prompt=hook_text,
-                voice=voice,
-                language_code=(data.get("language_code") or "").strip() or None,
-                speed=_as_float(data.get("speed")),
-                stability=_as_float(data.get("stability")),
-                similarity_boost=_as_float(data.get("similarity_boost")),
-                style=_as_float(data.get("style")),
-            )
-            audio_url = persist_replicate_audio(replicate_audio_url, job_id, variant="hook")
-        except Exception as e:
-            raise RuntimeError(f"[tts_audio] {e}") from e
-        artifacts["audio"] = {
-            "replicate_url": replicate_audio_url,
-            "storage_url": audio_url,
-        }
+        audio_artifact = artifacts.get("audio") if isinstance(artifacts.get("audio"), dict) else {}
+        audio_url = _artifact_storage_url(audio_artifact)
+        if not audio_url:
+            current_stage = "tts_audio"
+            _persist_progress("processing", current_stage)
+            try:
+                replicate_audio_url = generate_tts_audio(
+                    prompt=hook_text,
+                    voice=voice,
+                    language_code=(data.get("language_code") or "").strip() or None,
+                    speed=_as_float(data.get("speed")),
+                    stability=_as_float(data.get("stability")),
+                    similarity_boost=_as_float(data.get("similarity_boost")),
+                    style=_as_float(data.get("style")),
+                )
+                audio_url = persist_replicate_audio(replicate_audio_url, job_id, variant="hook")
+            except Exception as e:
+                raise RuntimeError(f"[tts_audio] {e}") from e
+            artifacts["audio"] = {
+                "replicate_url": replicate_audio_url,
+                "storage_url": audio_url,
+            }
+            _persist_progress("processing", "tts_audio_completed")
 
-        ugc_prompt = (
-            (data.get("ugc_prompt") or "").strip()
-            or "Generate a realistic UGC talking-head clip synced to the provided voice audio."
-        )
-        try:
-            replicate_hook_video_url = generate_ugc_hook_video(actor_image_url, audio_url, prompt=ugc_prompt)
-            hook_video_url = persist_replicate_video(replicate_hook_video_url, job_id, variant="ugc-hook")
-        except Exception as e:
-            raise RuntimeError(f"[ugc_hook_video] {e}") from e
-        artifacts["ugc_hook_video"] = {
-            "replicate_url": replicate_hook_video_url,
-            "storage_url": hook_video_url,
-        }
+        hook_artifact = artifacts.get("ugc_hook_video") if isinstance(artifacts.get("ugc_hook_video"), dict) else {}
+        hook_video_url = _artifact_storage_url(hook_artifact)
+        if not hook_video_url:
+            current_stage = "ugc_hook_video"
+            _persist_progress("processing", current_stage)
+            try:
+                replicate_hook_video_url = generate_ugc_hook_video(actor_image_url, audio_url, prompt=ugc_prompt)
+                hook_video_url = persist_replicate_video(replicate_hook_video_url, job_id, variant="ugc-hook")
+            except Exception as e:
+                raise RuntimeError(f"[ugc_hook_video] {e}") from e
+            artifacts["ugc_hook_video"] = {
+                "replicate_url": replicate_hook_video_url,
+                "storage_url": hook_video_url,
+            }
+            _persist_progress("processing", "ugc_hook_video_completed")
 
-        try:
-            replicate_product_video_url = run_image_to_video(product_image_urls[0], story_prompt)
-            product_video_url = persist_replicate_video(replicate_product_video_url, job_id, variant="product")
-        except Exception as e:
-            raise RuntimeError(f"[product_video] {e}") from e
-        artifacts["product_video"] = {
-            "replicate_url": replicate_product_video_url,
-            "storage_url": product_video_url,
-        }
+        product_artifact = artifacts.get("product_video") if isinstance(artifacts.get("product_video"), dict) else {}
+        product_video_url = _artifact_storage_url(product_artifact)
+        if not product_video_url:
+            current_stage = "product_video"
+            _persist_progress("processing", current_stage)
+            try:
+                replicate_product_video_url = run_image_to_video(product_image_urls[0], story_prompt)
+                product_video_url = persist_replicate_video(replicate_product_video_url, job_id, variant="product")
+            except Exception as e:
+                raise RuntimeError(f"[product_video] {e}") from e
+            artifacts["product_video"] = {
+                "replicate_url": replicate_product_video_url,
+                "storage_url": product_video_url,
+            }
+            _persist_progress("processing", "product_video_completed")
 
-        try:
-            # Merge order is intentional: UGC hook first, product video second.
-            replicate_final_video_url = stitch_videos([hook_video_url, product_video_url])
-            final_video_url = persist_replicate_video(replicate_final_video_url, job_id)
-        except Exception as e:
-            raise RuntimeError(f"[video_merge] {e}") from e
-        artifacts["final_video"] = {
-            "replicate_url": replicate_final_video_url,
-            "storage_url": final_video_url,
-        }
+        final_artifact = artifacts.get("final_video") if isinstance(artifacts.get("final_video"), dict) else {}
+        final_video_url = _artifact_storage_url(final_artifact)
+        if not final_video_url:
+            current_stage = "video_merge"
+            _persist_progress("processing", current_stage)
+            try:
+                # Merge order is intentional: UGC hook first, product video second.
+                replicate_final_video_url = stitch_videos([hook_video_url, product_video_url])
+                final_video_url = persist_replicate_video(replicate_final_video_url, job_id)
+            except Exception as e:
+                raise RuntimeError(f"[video_merge] {e}") from e
+            artifacts["final_video"] = {
+                "replicate_url": replicate_final_video_url,
+                "storage_url": final_video_url,
+            }
 
         update_job_result(job_id, str(g.user_id), final_video_url, "succeeded")
-        manifest = {
-            "job_id": job_id,
-            "user_id": str(g.user_id),
-            "status": "succeeded",
-            "inputs": {
-                "prompt": raw_prompt,
-                "source_prompt": source_prompt,
-                "tone": tone,
-                "duration_target_sec": duration_target_sec,
-                "voice": voice,
-                "product_info": product_info,
-                "actor_variant_id": actor_variant_id or None,
-                "actor_image_url": actor_image_url,
-                "product_image_urls": product_image_urls,
-            },
-            "agent_outputs": agent_outputs,
-            "artifacts": artifacts,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        manifest_url = save_pipeline_manifest(job_id, manifest)
+        _persist_progress("succeeded", "completed")
     except Exception as e:
         update_job_result(job_id, str(g.user_id), None, "failed")
-        fail_manifest = {
-            "job_id": job_id,
-            "user_id": str(g.user_id),
-            "status": "failed",
-            "error": str(e),
-            "inputs": {
-                "prompt": raw_prompt,
-                "source_prompt": source_prompt,
-                "tone": tone,
-                "duration_target_sec": duration_target_sec,
-                "voice": voice,
-                "product_info": product_info,
-                "actor_variant_id": actor_variant_id or None,
-                "actor_image_url": actor_image_url,
-                "product_image_urls": product_image_urls,
-            },
-            "agent_outputs": agent_outputs,
+        _persist_progress("failed", current_stage, error=str(e))
+        return jsonify({
+            "error": "Full pipeline failed",
+            "message": str(e),
+            "current_stage": current_stage,
             "artifacts": artifacts,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        save_pipeline_manifest(job_id, fail_manifest)
-        return jsonify({"error": "Full pipeline failed", "message": str(e), "artifacts": artifacts}), 500
+            "manifest_url": manifest_url,
+        }), 500
 
     response = {
         "job_id": job_id,
@@ -1067,6 +1146,7 @@ def start_full_job(job_id):
         "output_video_url": final_video_url,
         "manifest_url": manifest_url,
         "artifacts": artifacts,
+        "resumed": resume_pipeline and bool(existing_artifacts),
     }
     if agent_outputs:
         response["agent_outputs"] = agent_outputs
@@ -1111,7 +1191,8 @@ def get_job_status(job_id):
                 job = get_job(job_id, str(g.user_id)) or job
         except Exception:
             pass
-    return jsonify({
+    manifest = get_pipeline_manifest(job_id) or {}
+    response = {
         "job_id": job["id"],
         "status": job["status"],
         "image_url": job.get("image_url"),
@@ -1120,7 +1201,16 @@ def get_job_status(job_id):
         "replicate_prediction_id": job.get("replicate_prediction_id"),
         "output_video_url": job.get("output_video_url"),
         "created_at": job.get("created_at"),
-    })
+    }
+    if isinstance(manifest, dict) and manifest:
+        response["pipeline"] = {
+            "status": manifest.get("status"),
+            "current_stage": manifest.get("current_stage"),
+            "updated_at": manifest.get("updated_at"),
+            "error": manifest.get("error"),
+            "artifacts": manifest.get("artifacts") or {},
+        }
+    return jsonify(response)
 
 
 @api_bp.get("/api/jobs/<uuid:job_id>/result")
@@ -1146,9 +1236,20 @@ def get_job_result(job_id):
     if job["status"] == "succeeded" and job.get("output_video_url"):
         return jsonify({"output_video_url": job["output_video_url"]})
     if job["status"] == "processing":
-        return jsonify({"status": "processing", "message": "Video not ready yet"}), 202
+        manifest = get_pipeline_manifest(job_id) or {}
+        response = {"status": "processing", "message": "Video not ready yet"}
+        if isinstance(manifest, dict) and manifest:
+            response["current_stage"] = manifest.get("current_stage")
+            response["artifacts"] = manifest.get("artifacts") or {}
+        return jsonify(response), 202
     if job["status"] == "failed":
-        return jsonify({"error": "Job failed"}), 500
+        manifest = get_pipeline_manifest(job_id) or {}
+        response = {"error": "Job failed"}
+        if isinstance(manifest, dict) and manifest:
+            response["current_stage"] = manifest.get("current_stage")
+            response["details"] = manifest.get("error")
+            response["artifacts"] = manifest.get("artifacts") or {}
+        return jsonify(response), 500
     return jsonify({"status": job["status"], "message": "No video result yet"}), 202
 
 

@@ -49,7 +49,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `REPLICATE_TTS_VOICE` – (optional) Default ElevenLabs voice (name or voice_id), default `Rachel`  
 - `REPLICATE_TTS_LANGUAGE_CODE` – (optional) Language code for TTS, default `en`  
 - `REPLICATE_FABRIC_MODEL` – (optional) UGC talking-head model, default `veed/fabric-1.0`  
-- `REPLICATE_FABRIC_RESOLUTION` – (optional) Fabric output resolution, default `720p`  
+- `REPLICATE_FABRIC_RESOLUTION` – (optional) Fabric output resolution (`480p` or `720p`), default `480p`  
 - `REPLICATE_FFMPEG_MODEL` – (optional) Stitch model, default `idan054/better-video-merge:6bda9eb61c16dedaa6804792a252cf7a7c260a5c2bf3ac479adab2d3a4e983ad`  
 - `REPLICATE_ACTOR_MODEL` – (optional) Actor portrait generation model, default `bytedance/seedream-4.5`
 - `REPLICATE_ACTOR_IMAGE_COUNT` – (optional) Default number of actor variants to create, default `4`
@@ -121,12 +121,14 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
     - `voice` (supported name), `language_code`, `speed`, `stability`, `similarity_boost`, `style`
     - `use_agents` (default `true`), `tone`, `duration_target_sec`
     - `hook_text`, `story_prompt`, `ugc_prompt` (manual overrides)
+    - `resume` (default `true`): reuse completed stage artifacts from the saved manifest when retrying a partial run
+    - `force_restart` (default `false`): allow restarting a job that is stuck in `processing`; combine with `resume=true` to continue from saved artifacts
   - Returns `output_video_url`, per-step artifact URLs, and `manifest_url`.
   - Merge stage always enforces `keep_audio=true`.
 - **GET /api/jobs/<job_id>/pipeline** – Auth: Bearer. Returns stored pipeline manifest/artifacts.
 - **GET /api/jobs** – Auth: Bearer. List current user's generations (newest first). Query: `limit` (default 50, max 100), `offset` (default 0). Returns `{ "jobs": [...], "total": N }` with `id`, `status`, `image_url`, `prompt`, `actor_variant_id`, `output_video_url`, `created_at` per job.  
-- **GET /api/jobs/<job_id>** – Auth: Bearer. Returns job status, `actor_variant_id`, and, when done, `output_video_url`.  
-- **GET /api/jobs/<job_id>/result** – Auth: Bearer. Returns `{ "output_video_url": "..." }` when ready, or 202 while processing.  
+- **GET /api/jobs/<job_id>** – Auth: Bearer. Returns job status, `actor_variant_id`, and, when available, `pipeline.current_stage`, saved artifacts, and `output_video_url`.  
+- **GET /api/jobs/<job_id>/result** – Auth: Bearer. Returns `{ "output_video_url": "..." }` when ready, or 202 while processing with the current pipeline stage when available.  
 
 ## One-Click Deploy
 

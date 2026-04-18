@@ -22,7 +22,8 @@ REPLICATE_TTS_MODEL = os.environ.get("REPLICATE_TTS_MODEL", "elevenlabs/v3").str
 REPLICATE_TTS_VOICE = os.environ.get("REPLICATE_TTS_VOICE", "Rachel").strip()
 REPLICATE_TTS_LANGUAGE_CODE = os.environ.get("REPLICATE_TTS_LANGUAGE_CODE", "en").strip()
 REPLICATE_FABRIC_MODEL = os.environ.get("REPLICATE_FABRIC_MODEL", "veed/fabric-1.0").strip()
-REPLICATE_FABRIC_RESOLUTION = os.environ.get("REPLICATE_FABRIC_RESOLUTION", "720p").strip()
+# Fabric 1.0 supports 480p or 720p; default to 480p for faster talking-head generation.
+REPLICATE_FABRIC_RESOLUTION = os.environ.get("REPLICATE_FABRIC_RESOLUTION", "480p").strip()
 REPLICATE_FFMPEG_MODEL = os.environ.get(
     "REPLICATE_FFMPEG_MODEL",
     "idan054/better-video-merge:6bda9eb61c16dedaa6804792a252cf7a7c260a5c2bf3ac479adab2d3a4e983ad",
