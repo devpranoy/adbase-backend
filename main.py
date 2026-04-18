@@ -80,7 +80,8 @@ def read_root():
             <nav>
                 <a href="/" class="logo">Vercel + Flask</a>
                 <div class="nav-links">
-                    <a href="/api/data">API</a>
+                    <a href="/docs">Docs</a>
+                    <a href="/openapi.json">OpenAPI</a>
                 </div>
             </nav>
         </header>
@@ -98,13 +99,18 @@ def read_root():
                 </div>
             </div>
 
-            <div class="cards">
-                <div class="card">
-                    <h3>Sample Data</h3>
-                    <p>Access sample JSON data through our REST API. Perfect for testing and development purposes.</p>
-                    <a href="/api/data">Get Data →</a>
+                <div class="cards">
+                    <div class="card">
+                        <h3>Swagger Docs</h3>
+                        <p>Browse every endpoint, inspect request payloads, and try the API directly from the browser.</p>
+                        <a href="/docs">Open Docs →</a>
+                    </div>
+                    <div class="card">
+                        <h3>OpenAPI JSON</h3>
+                        <p>Share the machine-readable API contract with frontend, QA, or external integrators.</p>
+                        <a href="/openapi.json">View Spec →</a>
+                    </div>
                 </div>
-            </div>
         </main>
     </body>
     </html>

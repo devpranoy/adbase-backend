@@ -24,6 +24,11 @@ gunicorn main:app
 
 Your Flask application is now available at `http://localhost:3000`.
 
+Interactive docs are available at:
+
+- `http://localhost:3000/docs`
+- `http://localhost:3000/openapi.json`
+
 ## Environment variables
 
 Set these locally (and in Vercel) for auth, Supabase, and Replicate:
@@ -56,6 +61,8 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 ## API
 
 - **POST /api/auth/login** – Body: `{ "username", "password" }`. Returns `{ "token": "..." }`.  
+- **GET /docs** – Interactive Swagger UI for the backend.
+- **GET /openapi.json** – OpenAPI document for sharing with frontend/QA/integrators.
 - **GET /api/actors** – Auth: Bearer. List current user's reusable actor library with the primary variant for each actor.
 - **GET /api/actors/<actor_id>** – Auth: Bearer. Return one actor and all generated still variants.
 - **POST /api/actors/generate** – Auth: Bearer. Create a synthetic actor from structured attributes and generate reusable still portraits.

@@ -6,6 +6,7 @@ from flask import Blueprint, g, jsonify, request
 
 from ad_agents import generate_ad_agents
 from auth import require_auth, verify_user, issue_jwt
+from openapi_spec import build_openapi_spec
 from supabase_client import (
     upload_product_image,
     upload_actor_image,
@@ -48,6 +49,7 @@ api_bp = Blueprint("api", __name__)
 
 ALLOWED_IMAGE_EXTENSIONS = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 ALLOWED_ACTOR_AGE_BANDS = {"18-24", "25-34", "35-44", "45-54", "55+"}
+SWAGGER_UI_VERSION = "5.29.1"
 
 
 def _as_bool(value, default: bool = False) -> bool:
@@ -234,6 +236,76 @@ def _persist_actor_generation_outputs(
     return created_variants, warnings
 
 
+def _swagger_ui_html() -> str:
+    css_url = f"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/{SWAGGER_UI_VERSION}/swagger-ui.min.css"
+    bundle_url = f"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/{SWAGGER_UI_VERSION}/swagger-ui-bundle.min.js"
+    preset_url = (
+        f"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/{SWAGGER_UI_VERSION}/swagger-ui-standalone-preset.min.js"
+    )
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Adbase API Docs</title>
+        <link rel="stylesheet" href="{css_url}">
+        <style>
+            html {{
+                box-sizing: border-box;
+                overflow-y: scroll;
+            }}
+            *, *:before, *:after {{
+                box-sizing: inherit;
+            }}
+            body {{
+                margin: 0;
+                background: #f7f9fc;
+            }}
+            .topbar {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 14px 20px;
+                background: #0f172a;
+                color: #f8fafc;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }}
+            .topbar a {{
+                color: #93c5fd;
+                text-decoration: none;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="topbar">
+            <strong>Adbase Backend API Docs</strong>
+            <a href="/openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON</a>
+        </div>
+        <div id="swagger-ui"></div>
+        <script src="{bundle_url}"></script>
+        <script src="{preset_url}"></script>
+        <script>
+            window.onload = function() {{
+                window.ui = SwaggerUIBundle({{
+                    url: "/openapi.json",
+                    dom_id: "#swagger-ui",
+                    deepLinking: true,
+                    docExpansion: "list",
+                    persistAuthorization: true,
+                    presets: [
+                        SwaggerUIBundle.presets.apis,
+                        SwaggerUIStandalonePreset
+                    ],
+                    layout: "StandaloneLayout"
+                }});
+            }};
+        </script>
+    </body>
+    </html>
+    """
+
+
 # --- Auth ---
 
 
@@ -248,6 +320,18 @@ def login():
         return jsonify({"error": "Invalid username or password"}), 401
     token = issue_jwt(user_id)
     return jsonify({"token": token})
+
+
+@api_bp.get("/openapi.json")
+def openapi_json():
+    """GET /openapi.json: machine-readable OpenAPI document for the backend."""
+    return jsonify(build_openapi_spec(request.url_root))
+
+
+@api_bp.get("/docs")
+def swagger_docs():
+    """GET /docs: interactive Swagger UI for the OpenAPI document."""
+    return _swagger_ui_html()
 
 
 # --- Actors (all require Bearer token) ---
