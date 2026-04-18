@@ -236,6 +236,12 @@ def _persist_actor_generation_outputs(
     return created_variants, warnings
 
 
+def _normalize_uuid_param(value) -> str:
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    return str(uuid.UUID(str(value)))
+
+
 def _swagger_ui_html() -> str:
     css_url = f"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/{SWAGGER_UI_VERSION}/swagger-ui.min.css"
     bundle_url = f"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/{SWAGGER_UI_VERSION}/swagger-ui-bundle.min.js"
@@ -356,14 +362,11 @@ def list_user_actors():
     return jsonify({"actors": payload, "total": len(payload)})
 
 
-@api_bp.get("/api/actors/<actor_id>")
+@api_bp.get("/api/actors/<uuid:actor_id>")
 @require_auth
-def get_user_actor(actor_id: str):
+def get_user_actor(actor_id):
     """GET /api/actors/<actor_id>: return one actor and its variants."""
-    try:
-        uuid.UUID(actor_id)
-    except ValueError:
-        return jsonify({"error": "Invalid actor_id"}), 400
+    actor_id = _normalize_uuid_param(actor_id)
 
     user_id = str(g.user_id)
     actor = get_actor(actor_id, user_id)
@@ -451,14 +454,11 @@ def generate_actor():
         return jsonify({"error": "Actor generation failed", "message": str(e)}), 500
 
 
-@api_bp.post("/api/actors/<actor_id>/variants")
+@api_bp.post("/api/actors/<uuid:actor_id>/variants")
 @require_auth
-def generate_actor_variants(actor_id: str):
+def generate_actor_variants(actor_id):
     """POST /api/actors/<actor_id>/variants: create more still variants for an existing actor."""
-    try:
-        uuid.UUID(actor_id)
-    except ValueError:
-        return jsonify({"error": "Invalid actor_id"}), 400
+    actor_id = _normalize_uuid_param(actor_id)
 
     user_id = str(g.user_id)
     actor = get_actor(actor_id, user_id)
@@ -506,14 +506,11 @@ def generate_actor_variants(actor_id: str):
         return jsonify({"error": "Actor variant generation failed", "message": str(e)}), 500
 
 
-@api_bp.post("/api/actors/<actor_id>/select-primary")
+@api_bp.post("/api/actors/<uuid:actor_id>/select-primary")
 @require_auth
-def select_primary_actor(actor_id: str):
+def select_primary_actor(actor_id):
     """POST /api/actors/<actor_id>/select-primary: choose which variant should be the default actor image."""
-    try:
-        uuid.UUID(actor_id)
-    except ValueError:
-        return jsonify({"error": "Invalid actor_id"}), 400
+    actor_id = _normalize_uuid_param(actor_id)
 
     user_id = str(g.user_id)
     actor = get_actor(actor_id, user_id)
@@ -689,14 +686,11 @@ def upload_full_job():
     }), 201
 
 
-@api_bp.post("/api/jobs/<job_id>/start")
+@api_bp.post("/api/jobs/<uuid:job_id>/start")
 @require_auth
-def start_job(job_id: str):
+def start_job(job_id):
     """POST /api/jobs/<job_id>/start: start Replicate prediction for a draft job."""
-    try:
-        uuid.UUID(job_id)
-    except ValueError:
-        return jsonify({"error": "Invalid job_id"}), 400
+    job_id = _normalize_uuid_param(job_id)
     job = get_job(job_id, str(g.user_id))
     if not job:
         return jsonify({"error": "Job not found"}), 404
@@ -762,14 +756,11 @@ def generate_agents():
     return jsonify(outputs)
 
 
-@api_bp.post("/api/jobs/<job_id>/agents")
+@api_bp.post("/api/jobs/<uuid:job_id>/agents")
 @require_auth
-def generate_job_agents(job_id: str):
+def generate_job_agents(job_id):
     """POST /api/jobs/<job_id>/agents: generate hook/story outputs for an existing job."""
-    try:
-        uuid.UUID(job_id)
-    except ValueError:
-        return jsonify({"error": "Invalid job_id"}), 400
+    job_id = _normalize_uuid_param(job_id)
     job = get_job(job_id, str(g.user_id))
     if not job:
         return jsonify({"error": "Job not found"}), 404
@@ -792,16 +783,13 @@ def generate_job_agents(job_id: str):
     return jsonify({"job_id": job_id, "agent_outputs": outputs})
 
 
-@api_bp.post("/api/jobs/<job_id>/audio")
+@api_bp.post("/api/jobs/<uuid:job_id>/audio")
 @require_auth
-def generate_job_audio(job_id: str):
+def generate_job_audio(job_id):
     """
     POST /api/jobs/<job_id>/audio: generate TTS audio using Replicate elevenlabs/v3 and persist to storage.
     """
-    try:
-        uuid.UUID(job_id)
-    except ValueError:
-        return jsonify({"error": "Invalid job_id"}), 400
+    job_id = _normalize_uuid_param(job_id)
     job = get_job(job_id, str(g.user_id))
     if not job:
         return jsonify({"error": "Job not found"}), 404
@@ -865,18 +853,15 @@ def generate_job_audio(job_id: str):
     return jsonify(response)
 
 
-@api_bp.post("/api/jobs/<job_id>/start-full")
+@api_bp.post("/api/jobs/<uuid:job_id>/start-full")
 @require_auth
-def start_full_job(job_id: str):
+def start_full_job(job_id):
     """
     POST /api/jobs/<job_id>/start-full:
     Full pipeline orchestration:
     script/story -> tts audio -> ugc hook video -> product video -> stitch final video.
     """
-    try:
-        uuid.UUID(job_id)
-    except ValueError:
-        return jsonify({"error": "Invalid job_id"}), 400
+    job_id = _normalize_uuid_param(job_id)
 
     job = get_job(job_id, str(g.user_id))
     if not job:
@@ -1088,14 +1073,11 @@ def start_full_job(job_id: str):
     return jsonify(response)
 
 
-@api_bp.get("/api/jobs/<job_id>/pipeline")
+@api_bp.get("/api/jobs/<uuid:job_id>/pipeline")
 @require_auth
-def get_job_pipeline(job_id: str):
+def get_job_pipeline(job_id):
     """GET /api/jobs/<job_id>/pipeline: return stored full-pipeline manifest/artifacts."""
-    try:
-        uuid.UUID(job_id)
-    except ValueError:
-        return jsonify({"error": "Invalid job_id"}), 400
+    job_id = _normalize_uuid_param(job_id)
     job = get_job(job_id, str(g.user_id))
     if not job:
         return jsonify({"error": "Job not found"}), 404
@@ -1105,14 +1087,11 @@ def get_job_pipeline(job_id: str):
     return jsonify({"job_id": job_id, "pipeline": manifest})
 
 
-@api_bp.get("/api/jobs/<job_id>")
+@api_bp.get("/api/jobs/<uuid:job_id>")
 @require_auth
-def get_job_status(job_id: str):
+def get_job_status(job_id):
     """GET /api/jobs/<job_id>: return job status; if processing, poll Replicate and update DB."""
-    try:
-        uuid.UUID(job_id)
-    except ValueError:
-        return jsonify({"error": "Invalid job_id"}), 400
+    job_id = _normalize_uuid_param(job_id)
     job = get_job(job_id, str(g.user_id))
     if not job:
         return jsonify({"error": "Job not found"}), 404
@@ -1144,14 +1123,11 @@ def get_job_status(job_id: str):
     })
 
 
-@api_bp.get("/api/jobs/<job_id>/result")
+@api_bp.get("/api/jobs/<uuid:job_id>/result")
 @require_auth
-def get_job_result(job_id: str):
+def get_job_result(job_id):
     """GET /api/jobs/<job_id>/result: return video URL if succeeded, 202 if still processing."""
-    try:
-        uuid.UUID(job_id)
-    except ValueError:
-        return jsonify({"error": "Invalid job_id"}), 400
+    job_id = _normalize_uuid_param(job_id)
     job = get_job(job_id, str(g.user_id))
     if not job:
         return jsonify({"error": "Job not found"}), 404
