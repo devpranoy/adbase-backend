@@ -8,16 +8,29 @@ from ad_agents import generate_ad_agents
 from auth import require_auth, verify_user, issue_jwt
 from supabase_client import (
     upload_product_image,
+    upload_actor_image,
     create_job,
     get_job,
     list_jobs,
     persist_replicate_video,
     persist_replicate_audio,
+    persist_replicate_actor_image,
     save_pipeline_manifest,
     get_pipeline_manifest,
     update_job_prediction,
     update_job_result,
     update_job_status,
+    update_job_actor_variant,
+    create_actor,
+    get_actor,
+    list_actors,
+    update_actor_status,
+    create_actor_variant,
+    get_actor_variant,
+    list_actor_variants,
+    get_primary_actor_variant,
+    update_actor_variant,
+    set_primary_actor_variant,
 )
 from replicate_client import (
     start_image_to_video,
@@ -27,12 +40,14 @@ from replicate_client import (
     generate_ugc_hook_video,
     run_image_to_video,
     stitch_videos,
+    generate_actor_images,
 )
 from elevenlabs_voices import validate_voice_or_raise, resolve_supported_voice
 
 api_bp = Blueprint("api", __name__)
 
 ALLOWED_IMAGE_EXTENSIONS = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+ALLOWED_ACTOR_AGE_BANDS = {"18-24", "25-34", "35-44", "45-54", "55+"}
 
 
 def _as_bool(value, default: bool = False) -> bool:
@@ -78,6 +93,147 @@ def _build_agent_prompt(user_prompt: str, product_info) -> str:
     return f"{base}\n\nProduct info:\n{json.dumps(product_info, ensure_ascii=True)}".strip()
 
 
+def _stringify_actor_traits(traits) -> str:
+    if isinstance(traits, str):
+        return traits.strip()
+    if isinstance(traits, list):
+        parts = [str(item).strip() for item in traits if str(item).strip()]
+        return ", ".join(parts)
+    if isinstance(traits, dict):
+        parts = []
+        for key, value in traits.items():
+            label = str(key).replace("_", " ").strip()
+            if isinstance(value, list):
+                value_text = ", ".join(str(item).strip() for item in value if str(item).strip())
+            else:
+                value_text = str(value).strip()
+            if label and value_text:
+                parts.append(f"{label}: {value_text}")
+        return "; ".join(parts)
+    return ""
+
+
+def _build_actor_prompt(
+    *,
+    age_band: str,
+    ethnicity: str,
+    gender_presentation: str,
+    traits,
+    prompt_override: str = "",
+) -> str:
+    override = (prompt_override or "").strip()
+    if override:
+        return override
+
+    details = [
+        "Create a photorealistic chest-up portrait of a single adult synthetic actor for UGC advertising.",
+        f"Age band: {age_band}.",
+        f"Ethnicity: {ethnicity}.",
+    ]
+    if gender_presentation:
+        details.append(f"Gender presentation: {gender_presentation}.")
+
+    traits_text = _stringify_actor_traits(traits)
+    if traits_text:
+        details.append(f"Additional traits: {traits_text}.")
+
+    details.extend([
+        "Use natural skin texture, realistic lighting, centered framing, and a simple uncluttered background.",
+        "The actor should look like a modern creator who could appear in a paid social ad.",
+        "Keep the face fully visible with no hats, sunglasses, text overlays, watermarks, or extra people in frame.",
+        "This must be an original person and must not resemble a celebrity, influencer, or public figure.",
+    ])
+    return " ".join(details)
+
+
+def _build_actor_variant_prompt(base_prompt: str, variation_notes: str = "") -> str:
+    prompt = (base_prompt or "").strip()
+    notes = (variation_notes or "").strip()
+    suffix = (
+        "Keep the same person and facial identity as the reference image while creating a fresh portrait variation "
+        "with slightly different pose, expression, framing, or wardrobe details."
+    )
+    if notes:
+        suffix = f"{suffix} Variation request: {notes}."
+    return f"{prompt}\n\n{suffix}".strip()
+
+
+def _serialize_actor(actor: dict, variants: list[dict] | None = None) -> dict:
+    actor_data = dict(actor)
+    variant_rows = variants
+    if variant_rows is None:
+        variant_rows = list_actor_variants(actor["id"], actor["user_id"])
+    primary_variant = next((variant for variant in variant_rows if variant.get("is_primary")), None)
+    if primary_variant is None:
+        primary_variant = get_primary_actor_variant(actor["id"], actor["user_id"])
+    actor_data["primary_variant"] = primary_variant
+    actor_data["variant_count"] = len(variant_rows)
+    if variants is not None:
+        actor_data["variants"] = variant_rows
+    return actor_data
+
+
+def _persist_actor_generation_outputs(
+    *,
+    actor_id: str,
+    user_id: str,
+    prompt: str,
+    generation_result: dict,
+    make_first_primary: bool,
+) -> tuple[list[dict], list[str]]:
+    created_variants = []
+    warnings = []
+    image_urls = [
+        str(url).strip()
+        for url in (generation_result.get("images") or [])
+        if str(url).strip()
+    ]
+    model_name = str(generation_result.get("model") or "").strip() or None
+
+    for index, replicate_image_url in enumerate(image_urls):
+        metadata = {
+            "replicate_url": replicate_image_url,
+            "generation_index": index + 1,
+        }
+        variant = create_actor_variant(
+            actor_id,
+            user_id,
+            status="generating",
+            prompt=prompt,
+            replicate_model=model_name,
+            metadata=metadata,
+            is_primary=make_first_primary and index == 0,
+        )
+        try:
+            image_url = persist_replicate_actor_image(replicate_image_url, actor_id, variant["id"])
+            update_actor_variant(
+                variant["id"],
+                user_id,
+                {
+                    "status": "ready",
+                    "image_url": image_url,
+                    "thumbnail_url": image_url,
+                    "metadata": metadata,
+                },
+            )
+            stored_variant = get_actor_variant(variant["id"], user_id)
+            if stored_variant:
+                created_variants.append(stored_variant)
+        except Exception as e:
+            update_actor_variant(
+                variant["id"],
+                user_id,
+                {
+                    "status": "failed",
+                    "is_primary": False,
+                    "metadata": {**metadata, "error": str(e)},
+                },
+            )
+            warnings.append(str(e))
+
+    return created_variants, warnings
+
+
 # --- Auth ---
 
 
@@ -92,6 +248,214 @@ def login():
         return jsonify({"error": "Invalid username or password"}), 401
     token = issue_jwt(user_id)
     return jsonify({"token": token})
+
+
+# --- Actors (all require Bearer token) ---
+
+
+@api_bp.get("/api/actors")
+@require_auth
+def list_user_actors():
+    """GET /api/actors: list current user's actor library."""
+    try:
+        limit = min(int(request.args.get("limit", 50)), 100)
+    except (TypeError, ValueError):
+        limit = 50
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+    except (TypeError, ValueError):
+        offset = 0
+
+    user_id = str(g.user_id)
+    actors = list_actors(user_id, limit=limit, offset=offset)
+    payload = [_serialize_actor(actor) for actor in actors]
+    return jsonify({"actors": payload, "total": len(payload)})
+
+
+@api_bp.get("/api/actors/<actor_id>")
+@require_auth
+def get_user_actor(actor_id: str):
+    """GET /api/actors/<actor_id>: return one actor and its variants."""
+    try:
+        uuid.UUID(actor_id)
+    except ValueError:
+        return jsonify({"error": "Invalid actor_id"}), 400
+
+    user_id = str(g.user_id)
+    actor = get_actor(actor_id, user_id)
+    if not actor:
+        return jsonify({"error": "Actor not found"}), 404
+
+    variants = list_actor_variants(actor_id, user_id)
+    return jsonify({"actor": _serialize_actor(actor, variants=variants)})
+
+
+@api_bp.post("/api/actors/generate")
+@require_auth
+def generate_actor():
+    """POST /api/actors/generate: create a reusable synthetic actor and generate still variants."""
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip() or None
+    age_band = (data.get("age_band") or "").strip()
+    ethnicity = (data.get("ethnicity") or "").strip()
+    gender_presentation = (data.get("gender_presentation") or "").strip()
+    traits = data.get("traits")
+    prompt_override = (data.get("prompt_override") or "").strip()
+    model_override = (data.get("model") or "").strip() or None
+    image_count = data.get("image_count")
+
+    if age_band not in ALLOWED_ACTOR_AGE_BANDS:
+        return jsonify({
+            "error": "Invalid age_band",
+            "allowed_age_bands": sorted(ALLOWED_ACTOR_AGE_BANDS),
+        }), 400
+    if not ethnicity:
+        return jsonify({"error": "Missing 'ethnicity'"}), 400
+
+    prompt = _build_actor_prompt(
+        age_band=age_band,
+        ethnicity=ethnicity,
+        gender_presentation=gender_presentation,
+        traits=traits,
+        prompt_override=prompt_override,
+    )
+
+    user_id = str(g.user_id)
+    actor = create_actor(
+        user_id,
+        name=name,
+        age_band=age_band,
+        ethnicity=ethnicity,
+        gender_presentation=gender_presentation or None,
+        prompt=prompt,
+        attributes={"traits": traits} if traits is not None else {},
+        status="generating",
+    )
+
+    try:
+        generation_result = generate_actor_images(
+            prompt,
+            image_count=image_count,
+            model=model_override,
+        )
+        created_variants, warnings = _persist_actor_generation_outputs(
+            actor_id=actor["id"],
+            user_id=user_id,
+            prompt=prompt,
+            generation_result=generation_result,
+            make_first_primary=True,
+        )
+        if not created_variants:
+            update_actor_status(actor["id"], user_id, "failed")
+            return jsonify({"error": "Actor generation failed", "warnings": warnings}), 500
+
+        if not any(variant.get("is_primary") for variant in created_variants):
+            set_primary_actor_variant(actor["id"], user_id, created_variants[0]["id"])
+            created_variants = list_actor_variants(actor["id"], user_id)
+
+        update_actor_status(actor["id"], user_id, "ready")
+        actor = get_actor(actor["id"], user_id) or actor
+        response = {
+            "actor": _serialize_actor(actor, variants=created_variants),
+            "generation_model": generation_result.get("model"),
+        }
+        if warnings:
+            response["warnings"] = warnings
+        return jsonify(response), 201
+    except Exception as e:
+        update_actor_status(actor["id"], user_id, "failed")
+        return jsonify({"error": "Actor generation failed", "message": str(e)}), 500
+
+
+@api_bp.post("/api/actors/<actor_id>/variants")
+@require_auth
+def generate_actor_variants(actor_id: str):
+    """POST /api/actors/<actor_id>/variants: create more still variants for an existing actor."""
+    try:
+        uuid.UUID(actor_id)
+    except ValueError:
+        return jsonify({"error": "Invalid actor_id"}), 400
+
+    user_id = str(g.user_id)
+    actor = get_actor(actor_id, user_id)
+    if not actor:
+        return jsonify({"error": "Actor not found"}), 404
+
+    primary_variant = get_primary_actor_variant(actor_id, user_id)
+    if not primary_variant or not primary_variant.get("image_url"):
+        return jsonify({"error": "Actor has no primary variant to use as reference"}), 400
+
+    data = request.get_json(silent=True) or {}
+    model_override = (data.get("model") or "").strip() or None
+    image_count = data.get("image_count")
+    variation_notes = (data.get("variation_prompt") or "").strip()
+    prompt_override = (data.get("prompt_override") or "").strip()
+    prompt = prompt_override or _build_actor_variant_prompt(actor.get("prompt") or "", variation_notes)
+
+    try:
+        generation_result = generate_actor_images(
+            prompt,
+            image_count=image_count,
+            model=model_override,
+            reference_image_urls=[primary_variant["image_url"]],
+        )
+        created_variants, warnings = _persist_actor_generation_outputs(
+            actor_id=actor_id,
+            user_id=user_id,
+            prompt=prompt,
+            generation_result=generation_result,
+            make_first_primary=False,
+        )
+        if not created_variants:
+            return jsonify({"error": "Actor variant generation failed", "warnings": warnings}), 500
+
+        actor = get_actor(actor_id, user_id) or actor
+        response = {
+            "actor": _serialize_actor(actor, variants=list_actor_variants(actor_id, user_id)),
+            "created_variants": created_variants,
+            "generation_model": generation_result.get("model"),
+        }
+        if warnings:
+            response["warnings"] = warnings
+        return jsonify(response), 201
+    except Exception as e:
+        return jsonify({"error": "Actor variant generation failed", "message": str(e)}), 500
+
+
+@api_bp.post("/api/actors/<actor_id>/select-primary")
+@require_auth
+def select_primary_actor(actor_id: str):
+    """POST /api/actors/<actor_id>/select-primary: choose which variant should be the default actor image."""
+    try:
+        uuid.UUID(actor_id)
+    except ValueError:
+        return jsonify({"error": "Invalid actor_id"}), 400
+
+    user_id = str(g.user_id)
+    actor = get_actor(actor_id, user_id)
+    if not actor:
+        return jsonify({"error": "Actor not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    actor_variant_id = (data.get("actor_variant_id") or "").strip()
+    try:
+        uuid.UUID(actor_variant_id)
+    except ValueError:
+        return jsonify({"error": "Invalid actor_variant_id"}), 400
+
+    actor_variant = get_actor_variant(actor_variant_id, user_id)
+    if (
+        not actor_variant
+        or actor_variant.get("actor_id") != actor_id
+        or actor_variant.get("status") != "ready"
+        or not actor_variant.get("image_url")
+    ):
+        return jsonify({"error": "Actor variant not found"}), 404
+
+    set_primary_actor_variant(actor_id, user_id, actor_variant_id)
+    actor = get_actor(actor_id, user_id) or actor
+    variants = list_actor_variants(actor_id, user_id)
+    return jsonify({"actor": _serialize_actor(actor, variants=variants)})
 
 
 # --- Jobs (all require Bearer token) ---
@@ -165,6 +529,7 @@ def upload_full_job():
         except ValueError as e:
             return jsonify({"error": "Invalid voice", "message": str(e)}), 400
     product_info = _parse_json_field(request.form.get("product_info") or "")
+    actor_variant_id = (request.form.get("actor_variant_id") or "").strip()
 
     actor_file = request.files.get("actor_image")
     product_files = request.files.getlist("product_images")
@@ -184,17 +549,30 @@ def upload_full_job():
             product_image_urls.append(image_url)
 
         actor_image_url = None
-        if actor_file and actor_file.filename:
+        if actor_variant_id:
+            try:
+                uuid.UUID(actor_variant_id)
+            except ValueError:
+                return jsonify({"error": "Invalid actor_variant_id"}), 400
+            actor_variant = get_actor_variant(actor_variant_id, str(g.user_id))
+            if (
+                not actor_variant
+                or actor_variant.get("status") != "ready"
+                or not actor_variant.get("image_url")
+            ):
+                return jsonify({"error": "Actor variant not found"}), 404
+            actor_image_url = actor_variant["image_url"]
+        elif actor_file and actor_file.filename:
             if actor_file.content_type and actor_file.content_type not in ALLOWED_IMAGE_EXTENSIONS:
                 return jsonify({"error": f"Invalid actor image type: {actor_file.content_type}"}), 400
             actor_bytes = actor_file.read()
-            actor_image_url = upload_product_image(
+            actor_image_url = upload_actor_image(
                 actor_bytes,
                 actor_file.filename,
                 actor_file.content_type or "image/jpeg",
             )
 
-        job = create_job(str(g.user_id), product_image_urls[0], prompt)
+        job = create_job(str(g.user_id), product_image_urls[0], prompt, actor_variant_id=actor_variant_id or None)
         manifest = {
             "job_id": job["id"],
             "user_id": str(g.user_id),
@@ -202,6 +580,7 @@ def upload_full_job():
                 "prompt": prompt,
                 "voice": voice or None,
                 "product_info": product_info,
+                "actor_variant_id": actor_variant_id or None,
                 "actor_image_url": actor_image_url,
                 "product_image_urls": product_image_urls,
             },
@@ -219,6 +598,7 @@ def upload_full_job():
         "prompt": prompt,
         "voice": voice or None,
         "product_info": product_info,
+        "actor_variant_id": actor_variant_id or None,
         "actor_image_url": actor_image_url,
         "product_image_urls": product_image_urls,
         "manifest_url": manifest_url,
@@ -436,7 +816,32 @@ def start_full_job(job_id: str):
     if product_info is None:
         product_info = manifest_inputs.get("product_info")
 
-    actor_image_url = (data.get("actor_image_url") or "").strip() or (manifest_inputs.get("actor_image_url") or "")
+    actor_variant_id = (data.get("actor_variant_id") or "").strip()
+    if not actor_variant_id:
+        actor_variant_id = str(job.get("actor_variant_id") or "").strip()
+    if not actor_variant_id:
+        actor_variant_id = str(manifest_inputs.get("actor_variant_id") or "").strip()
+
+    actor_variant = None
+    if actor_variant_id:
+        try:
+            uuid.UUID(actor_variant_id)
+        except ValueError:
+            return jsonify({"error": "Invalid actor_variant_id"}), 400
+        actor_variant = get_actor_variant(actor_variant_id, str(g.user_id))
+        if (
+            not actor_variant
+            or actor_variant.get("status") != "ready"
+            or not actor_variant.get("image_url")
+        ):
+            return jsonify({"error": "Actor variant not found"}), 404
+
+    actor_image_url = ""
+    if actor_variant:
+        actor_image_url = actor_variant["image_url"]
+    else:
+        actor_image_url = (data.get("actor_image_url") or "").strip() or (manifest_inputs.get("actor_image_url") or "")
+
     body_product_images = data.get("product_image_urls")
     product_image_urls = []
     if isinstance(body_product_images, list):
@@ -469,6 +874,8 @@ def start_full_job(job_id: str):
 
     try:
         update_job_status(job_id, str(g.user_id), "processing")
+        if actor_variant_id:
+            update_job_actor_variant(job_id, str(g.user_id), actor_variant_id)
 
         if use_agents:
             agent_outputs = generate_ad_agents(
@@ -550,6 +957,7 @@ def start_full_job(job_id: str):
                 "duration_target_sec": duration_target_sec,
                 "voice": voice,
                 "product_info": product_info,
+                "actor_variant_id": actor_variant_id or None,
                 "actor_image_url": actor_image_url,
                 "product_image_urls": product_image_urls,
             },
@@ -572,6 +980,7 @@ def start_full_job(job_id: str):
                 "duration_target_sec": duration_target_sec,
                 "voice": voice,
                 "product_info": product_info,
+                "actor_variant_id": actor_variant_id or None,
                 "actor_image_url": actor_image_url,
                 "product_image_urls": product_image_urls,
             },
@@ -585,6 +994,7 @@ def start_full_job(job_id: str):
     response = {
         "job_id": job_id,
         "status": "succeeded",
+        "actor_variant_id": actor_variant_id or None,
         "output_video_url": final_video_url,
         "manifest_url": manifest_url,
         "artifacts": artifacts,
@@ -643,6 +1053,7 @@ def get_job_status(job_id: str):
         "status": job["status"],
         "image_url": job.get("image_url"),
         "prompt": job.get("prompt"),
+        "actor_variant_id": job.get("actor_variant_id"),
         "replicate_prediction_id": job.get("replicate_prediction_id"),
         "output_video_url": job.get("output_video_url"),
         "created_at": job.get("created_at"),

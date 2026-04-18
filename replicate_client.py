@@ -15,6 +15,10 @@ from config import (
     REPLICATE_FABRIC_MODEL,
     REPLICATE_FABRIC_RESOLUTION,
     REPLICATE_FFMPEG_MODEL,
+    REPLICATE_ACTOR_MODEL,
+    REPLICATE_ACTOR_IMAGE_COUNT,
+    REPLICATE_ACTOR_IMAGE_WIDTH,
+    REPLICATE_ACTOR_IMAGE_HEIGHT,
 )
 from elevenlabs_voices import resolve_supported_voice, list_supported_voices
 
@@ -81,6 +85,45 @@ def _extract_output_url(output: object) -> str | None:
             if isinstance(val, str):
                 return val
     return None
+
+
+def _extract_output_urls(output: object) -> list[str]:
+    if isinstance(output, str):
+        return [output] if output else []
+    if isinstance(output, list):
+        urls = []
+        for item in output:
+            if isinstance(item, str) and item:
+                urls.append(item)
+            elif hasattr(item, "url"):
+                url = getattr(item, "url", None)
+                if isinstance(url, str) and url:
+                    urls.append(url)
+        return urls
+    if hasattr(output, "url"):
+        url = getattr(output, "url", None)
+        return [url] if isinstance(url, str) and url else []
+    if isinstance(output, dict):
+        urls = []
+        for key in ("output", "images", "urls"):
+            val = output.get(key)
+            if isinstance(val, str) and val:
+                urls.append(val)
+            elif isinstance(val, list):
+                urls.extend(_extract_output_urls(val))
+        direct = output.get("url")
+        if isinstance(direct, str) and direct:
+            urls.append(direct)
+        return urls
+    return []
+
+
+def _coerce_int(value: int | None, default: int, min_v: int, max_v: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(min_v, min(max_v, parsed))
 
 
 def _run_model_with_fallback_inputs(model: str, candidate_inputs: list[dict]) -> object:
@@ -197,6 +240,78 @@ def generate_ugc_hook_video(actor_image_url: str, audio_url: str, prompt: str = 
     if not output_url:
         raise RuntimeError("Fabric output missing video URL")
     return output_url
+
+
+def generate_actor_images(
+    prompt: str,
+    *,
+    image_count: int | None = None,
+    model: str | None = None,
+    reference_image_urls: list[str] | None = None,
+) -> dict[str, object]:
+    """
+    Generate one or more actor still images and return the selected model plus output URLs.
+    Defaults to Seedream 4.5 for multi-image actor generation.
+    """
+    _ensure_token()
+    text = (prompt or "").strip()
+    if not text:
+        raise ValueError("prompt is required")
+
+    selected_model = (model or REPLICATE_ACTOR_MODEL or "").strip() or "bytedance/seedream-4.5"
+    desired_count = _coerce_int(image_count, REPLICATE_ACTOR_IMAGE_COUNT, 1, 8)
+    references = [
+        url.strip()
+        for url in (reference_image_urls or [])
+        if isinstance(url, str) and url.strip()
+    ]
+
+    image_urls: list[str] = []
+
+    if selected_model.startswith("bytedance/seedream-4.5"):
+        input_payload = {
+            "prompt": text,
+            "size": "custom",
+            "width": REPLICATE_ACTOR_IMAGE_WIDTH,
+            "height": REPLICATE_ACTOR_IMAGE_HEIGHT,
+            "sequential_image_generation": "auto" if desired_count > 1 else "disabled",
+            "max_images": desired_count,
+        }
+        if references:
+            input_payload["image_input"] = references[:3]
+        image_urls = _extract_output_urls(replicate.run(selected_model, input=input_payload))
+    elif selected_model.startswith("black-forest-labs/flux-1.1-pro-ultra"):
+        for _ in range(desired_count):
+            input_payload = {
+                "prompt": text,
+                "aspect_ratio": "3:4",
+                "output_format": "jpg",
+                "raw": True,
+            }
+            if references:
+                input_payload["image_prompt"] = references[0]
+                input_payload["image_prompt_strength"] = 0.15
+            image_urls.extend(_extract_output_urls(replicate.run(selected_model, input=input_payload)))
+    elif selected_model.startswith("runwayml/gen4-image"):
+        tag_count = min(len(references), 3)
+        for _ in range(desired_count):
+            input_payload = {
+                "prompt": text,
+                "aspect_ratio": "3:4",
+                "resolution": "720p",
+            }
+            if tag_count > 0:
+                input_payload["reference_images"] = references[:tag_count]
+                input_payload["reference_tags"] = [f"actor{i + 1}" for i in range(tag_count)]
+            image_urls.extend(_extract_output_urls(replicate.run(selected_model, input=input_payload)))
+    else:
+        image_urls = _extract_output_urls(replicate.run(selected_model, input={"prompt": text}))
+
+    image_urls = [url for url in image_urls if url]
+    if not image_urls:
+        raise RuntimeError("Actor generation output missing image URLs")
+
+    return {"model": selected_model, "images": image_urls}
 
 
 def stitch_videos(video_urls: list[str]) -> str:

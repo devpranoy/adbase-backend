@@ -50,3 +50,16 @@ TTS audio generated via Replicate (ElevenLabs v3) is also copied into your stora
 
 Audio is stored under `completed/<job_id>.<ext>`.
 Full pipeline hook audio is stored under `completed/<job_id>-hook.<ext>`.
+
+## 6. Create the actor images bucket (for reusable synthetic actors)
+
+Synthetic actor portraits generated for the actor library are stored separately so they can be reused across jobs.
+
+1. In **Storage**, click **New bucket** again.
+2. **Name:** `actor-images` (or set env `SUPABASE_BUCKET_ACTORS` to match).
+3. **Public bucket:** turn **ON** so the generated actor images can be passed directly into downstream Replicate models.
+4. Click **Create bucket**.
+
+Actor assets are stored under:
+- `uploads/<filename>` for manually uploaded actor images
+- `generated/<actor_id>/<actor_variant_id>.<ext>` for Replicate-generated actor portraits
