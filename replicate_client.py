@@ -269,17 +269,33 @@ def generate_actor_images(
     image_urls: list[str] = []
 
     if selected_model.startswith("bytedance/seedream-4.5"):
-        input_payload = {
-            "prompt": text,
-            "size": "custom",
-            "width": REPLICATE_ACTOR_IMAGE_WIDTH,
-            "height": REPLICATE_ACTOR_IMAGE_HEIGHT,
-            "sequential_image_generation": "auto" if desired_count > 1 else "disabled",
-            "max_images": desired_count,
-        }
+        candidate_inputs = [
+            {
+                "prompt": text,
+                "size": "custom",
+                "width": REPLICATE_ACTOR_IMAGE_WIDTH,
+                "height": REPLICATE_ACTOR_IMAGE_HEIGHT,
+                "sequential_image_generation": "auto" if desired_count > 1 else "disabled",
+                "max_images": desired_count,
+            },
+            {
+                "prompt": text,
+                "size": "2K",
+                "aspect_ratio": "3:4",
+                "sequential_image_generation": "auto" if desired_count > 1 else "disabled",
+                "max_images": desired_count,
+            },
+            {
+                "prompt": text,
+                "size": "2K",
+                "sequential_image_generation": "auto" if desired_count > 1 else "disabled",
+                "max_images": desired_count,
+            },
+        ]
         if references:
-            input_payload["image_input"] = references[:3]
-        image_urls = _extract_output_urls(replicate.run(selected_model, input=input_payload))
+            for payload in candidate_inputs:
+                payload["image_input"] = references[:3]
+        image_urls = _extract_output_urls(_run_model_with_fallback_inputs(selected_model, candidate_inputs))
     elif selected_model.startswith("black-forest-labs/flux-1.1-pro-ultra"):
         for _ in range(desired_count):
             input_payload = {
