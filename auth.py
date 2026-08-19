@@ -1,6 +1,8 @@
 """Auth: verify user, issue JWT, require_auth decorator."""
+from datetime import datetime, timezone
 from functools import wraps
 from time import time
+import uuid
 
 import bcrypt
 import jwt
@@ -32,6 +34,25 @@ def verify_user(username: str, password: str) -> str | None:
     except Exception:
         return None
     return str(row["id"])
+
+
+def create_user(username: str, password: str) -> str:
+    """Create a user with a bcrypt password hash and return the new user id."""
+    user_id = str(uuid.uuid4())
+    password_hash = bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt(),
+    ).decode("utf-8")
+    client = get_client()
+    r = client.table("users").insert({
+        "id": user_id,
+        "username": username,
+        "password_hash": password_hash,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+    if not r.data or len(r.data) == 0:
+        raise RuntimeError("Failed to create user")
+    return str(r.data[0].get("id") or user_id)
 
 
 def issue_jwt(user_id: str) -> str:

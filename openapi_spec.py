@@ -44,7 +44,7 @@ def build_openapi_spec(server_url: str | None = None) -> dict[str, Any]:
                     },
                     "required": ["error"],
                 },
-                "LoginRequest": {
+                "AuthCredentials": {
                     "type": "object",
                     "properties": {
                         "username": {"type": "string"},
@@ -170,7 +170,7 @@ def build_openapi_spec(server_url: str | None = None) -> dict[str, Any]:
                         "required": True,
                         "content": {
                             "application/json": {
-                                "schema": {"$ref": "#/components/schemas/LoginRequest"}
+                                "schema": {"$ref": "#/components/schemas/AuthCredentials"}
                             }
                         },
                     },
@@ -185,6 +185,46 @@ def build_openapi_spec(server_url: str | None = None) -> dict[str, Any]:
                         },
                         "401": {
                             "description": "Invalid credentials",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                                }
+                            },
+                        },
+                    },
+                }
+            },
+            "/api/auth/register": {
+                "post": {
+                    "tags": ["Auth"],
+                    "summary": "Create a user and issue a JWT",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/AuthCredentials"}
+                            }
+                        },
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "User created and JWT issued",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/TokenResponse"}
+                                }
+                            },
+                        },
+                        "400": {
+                            "description": "Missing username or password",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                                }
+                            },
+                        },
+                        "409": {
+                            "description": "Username already exists",
                             "content": {
                                 "application/json": {
                                     "schema": {"$ref": "#/components/schemas/ErrorResponse"}

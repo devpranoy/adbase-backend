@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, g, jsonify, request
 
 from ad_agents import generate_ad_agents
-from auth import require_auth, verify_user, issue_jwt
+from auth import create_user, require_auth, verify_user, issue_jwt
 from openapi_spec import build_openapi_spec
 from supabase_client import (
     upload_product_image,
@@ -345,6 +345,32 @@ def _swagger_ui_html() -> str:
 
 
 # --- Auth ---
+
+
+@api_bp.post("/api/auth/register")
+def register():
+    """Create a user and immediately issue the same JWT used by the login endpoint."""
+    data = request.get_json(silent=True) or {}
+    username_raw = data.get("username")
+    password_raw = data.get("password")
+    if not isinstance(username_raw, str) or not isinstance(password_raw, str):
+        return jsonify({"error": "Username and password must be strings"}), 400
+    username = username_raw.strip()
+    password = password_raw
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+
+    try:
+        user_id = create_user(username, password)
+    except Exception as e:
+        # PostgreSQL unique_violation. Supabase/PostgREST exceptions expose this
+        # either as a code attribute or in their serialized error payload.
+        if getattr(e, "code", None) == "23505" or "23505" in str(e):
+            return jsonify({"error": "Username already exists"}), 409
+        return jsonify({"error": "Failed to create user"}), 500
+
+    token = issue_jwt(user_id)
+    return jsonify({"token": token}), 201
 
 
 @api_bp.post("/api/auth/login")

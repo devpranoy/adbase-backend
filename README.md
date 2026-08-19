@@ -61,6 +61,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 ## API
 
 - **POST /api/auth/login** – Body: `{ "username", "password" }`. Returns `{ "token": "..." }`.  
+- **POST /api/auth/register** – Body: `{ "username", "password" }`. Creates the user and returns `{ "token": "..." }` with HTTP 201.
 - **GET /docs** – Interactive Swagger UI for the backend.
 - **GET /openapi.json** – OpenAPI document for sharing with frontend/QA/integrators.
 - **GET /api/actors** – Auth: Bearer. List current user's reusable actor library with the primary variant for each actor.
