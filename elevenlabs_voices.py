@@ -31,7 +31,7 @@ _VOICE_NAMES = [
     "Alexandra",
     "Monika",
     "Mark",
-    "Grimblewood",
+    "Gimblewood",
 ]
 
 # Keep the legacy `voice_id` key for API compatibility; model accepts the name string.
