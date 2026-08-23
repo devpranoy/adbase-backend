@@ -35,7 +35,7 @@ REPLICATE_FFMPEG_MODEL = os.environ.get(
 ).strip()
 REPLICATE_ACTOR_MODEL = os.environ.get(
     "REPLICATE_ACTOR_MODEL",
-    "bytedance/seedream-4.5",
+    "bytedance/seedream-5-lite",
 ).strip()
 REPLICATE_ACTOR_IMAGE_COUNT = int(os.environ.get("REPLICATE_ACTOR_IMAGE_COUNT", "4") or "4")
 REPLICATE_ACTOR_IMAGE_WIDTH = int(os.environ.get("REPLICATE_ACTOR_IMAGE_WIDTH", "1536") or "1536")

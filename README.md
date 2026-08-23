@@ -52,7 +52,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `REPLICATE_FABRIC_MODEL` – (optional) UGC talking-head model, default `veed/fabric-1.0`  
 - `REPLICATE_FABRIC_RESOLUTION` – (optional) Fabric output resolution (`480p` or `720p`), default `480p`  
 - `REPLICATE_FFMPEG_MODEL` – (optional) Stitch model, default `idan054/better-video-merge:6bda9eb61c16dedaa6804792a252cf7a7c260a5c2bf3ac479adab2d3a4e983ad`  
-- `REPLICATE_ACTOR_MODEL` – (optional) Actor portrait generation model, default `bytedance/seedream-4.5`
+- `REPLICATE_ACTOR_MODEL` – (optional) Actor portrait generation model, default `bytedance/seedream-5-lite`
 - `REPLICATE_ACTOR_IMAGE_COUNT` – (optional) Default number of actor variants to create, default `4`
 - `REPLICATE_ACTOR_IMAGE_WIDTH` – (optional) Actor portrait width in px, default `1536`
 - `REPLICATE_ACTOR_IMAGE_HEIGHT` – (optional) Actor portrait height in px, default `2048`

@@ -262,14 +262,14 @@ def generate_actor_images(
 ) -> dict[str, object]:
     """
     Generate one or more actor still images and return the selected model plus output URLs.
-    Defaults to Seedream 4.5 for multi-image actor generation.
+    Defaults to Seedream 5 Lite for multi-image actor generation.
     """
     _ensure_token()
     text = (prompt or "").strip()
     if not text:
         raise ValueError("prompt is required")
 
-    selected_model = (model or REPLICATE_ACTOR_MODEL or "").strip() or "bytedance/seedream-4.5"
+    selected_model = (model or REPLICATE_ACTOR_MODEL or "").strip() or "bytedance/seedream-5-lite"
     desired_count = _coerce_int(image_count, REPLICATE_ACTOR_IMAGE_COUNT, 1, 8)
     references = [
         url.strip()
@@ -279,7 +279,19 @@ def generate_actor_images(
 
     image_urls: list[str] = []
 
-    if selected_model.startswith("bytedance/seedream-4.5"):
+    if selected_model.startswith("bytedance/seedream-5-lite"):
+        input_payload = {
+            "prompt": text,
+            "size": "2K",
+            "aspect_ratio": "3:4",
+            "sequential_image_generation": "auto" if desired_count > 1 else "disabled",
+            "max_images": desired_count,
+            "output_format": "png",
+        }
+        if references:
+            input_payload["image_input"] = references[:14]
+        image_urls = _extract_output_urls(replicate.run(selected_model, input=input_payload))
+    elif selected_model.startswith("bytedance/seedream-4.5"):
         candidate_inputs = [
             {
                 "prompt": text,
