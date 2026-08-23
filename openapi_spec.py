@@ -64,8 +64,9 @@ def build_openapi_spec(server_url: str | None = None) -> dict[str, Any]:
                     "properties": {
                         "name": {"type": "string"},
                         "voice_id": {"type": "string"},
+                        "sample_url": {"type": "string", "format": "uri"},
                     },
-                    "required": ["name", "voice_id"],
+                    "required": ["name", "voice_id", "sample_url"],
                 },
                 "ActorVariant": {
                     "type": "object",

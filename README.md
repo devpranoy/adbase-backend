@@ -39,6 +39,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `SUPABASE_BUCKET_VIDEOS` – (optional) Storage bucket for persisted video outputs, default `product-videos`  
 - `SUPABASE_BUCKET_AUDIO` – (optional) Storage bucket for persisted audio outputs, default `product-audio`  
 - `SUPABASE_BUCKET_ACTORS` – (optional) Storage bucket for reusable actor portraits, default `actor-images`
+- `SUPABASE_SAMPLE_VOICES_BASE_URL` – (optional) Public base URL for voice samples, defaulting to the `sample_voices` Supabase bucket
 - `REPLICATE_API_TOKEN` – Replicate API token  
 - `REPLICATE_IMAGE_TO_VIDEO_VERSION` – (optional) Model, default `google/veo-3.1-fast`  
 - `REPLICATE_VIDEO_RESOLUTION` – (optional) `720p` or `1080p`, default `720p`  
@@ -78,7 +79,7 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
     - `image_count` (optional): number of portrait variants to generate
 - **POST /api/actors/<actor_id>/variants** – Auth: Bearer. Generate additional still variants for an existing actor using the primary variant as a reference.
 - **POST /api/actors/<actor_id>/select-primary** – Auth: Bearer. JSON `{ "actor_variant_id": "..." }`. Marks one variant as the actor's default image.
-- **GET /api/voices/elevenlabs-v3** – Auth: Bearer. Returns the Replicate-allowed ElevenLabs v3 voices for selector UI and `default_voice`.
+- **GET /api/voices/elevenlabs-v3** – Auth: Bearer. Returns the Replicate-allowed ElevenLabs v3 voices with `sample_url` values for selector UI and `default_voice`.
 - **POST /api/jobs/upload** – Auth: Bearer token. Form: `image` (file), `prompt` (optional). Returns `job_id`, `image_url`, `status`.  
 - **POST /api/jobs/upload-full** – Auth: Bearer token. Multipart form for full flow:
   - `product_images` (one or more files; fallback field `image`)

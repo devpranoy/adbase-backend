@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from config import SUPABASE_SAMPLE_VOICES_BASE_URL
+
 # Allowed values taken from Replicate input validation for elevenlabs/v3.
 _VOICE_NAMES = [
     "Rachel",
@@ -33,7 +35,14 @@ _VOICE_NAMES = [
 ]
 
 # Keep the legacy `voice_id` key for API compatibility; model accepts the name string.
-_VOICE_OPTIONS: list[dict[str, str]] = [{"name": name, "voice_id": name} for name in _VOICE_NAMES]
+_VOICE_OPTIONS: list[dict[str, str]] = [
+    {
+        "name": name,
+        "voice_id": name,
+        "sample_url": f"{SUPABASE_SAMPLE_VOICES_BASE_URL}/{name}.mp3",
+    }
+    for name in _VOICE_NAMES
+]
 
 # Backward-compat for previous ElevenLabs ID values already handed to clients.
 _LEGACY_ID_TO_NAME = {
@@ -59,7 +68,7 @@ def list_supported_voices() -> list[dict[str, str]]:
 def resolve_supported_voice(voice_input: str | None, default_voice: str = "Rachel") -> dict[str, str]:
     """
     Resolve user voice input (name or voice_id) to a supported voice entry.
-    Returns {'name', 'voice_id'}.
+    Returns {'name', 'voice_id', 'sample_url'}.
     """
     raw = (voice_input or "").strip()
     if raw:
