@@ -50,6 +50,14 @@ api_bp = Blueprint("api", __name__)
 ALLOWED_IMAGE_EXTENSIONS = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 ALLOWED_ACTOR_AGE_BANDS = {"18-24", "25-34", "35-44", "45-54", "55+"}
 SWAGGER_UI_VERSION = "5.29.1"
+ACTOR_PHOTOREALISM_REQUIREMENTS = (
+    "The result must be indistinguishable from an unretouched real-person smartphone photograph, not digital art. "
+    "Show natural pores, fine facial hair, subtle skin variation, mild asymmetry, realistic eyes and teeth, "
+    "individual hair strands, small flyaways, and physically accurate hands if visible. "
+    "Use believable window light, gentle sensor grain, realistic depth of field, and neutral color processing. "
+    "Avoid illustration, animation, anime, cartoon, 3D render, CGI, game-character styling, doll-like features, "
+    "plastic or airbrushed skin, beauty filters, excessive makeup, fantasy lighting, uncanny symmetry, and HDR gloss."
+)
 
 
 def _as_bool(value, default: bool = False) -> bool:
@@ -125,10 +133,10 @@ def _build_actor_prompt(
 ) -> str:
     override = (prompt_override or "").strip()
     if override:
-        return override
+        return f"{override} {ACTOR_PHOTOREALISM_REQUIREMENTS}"
 
     details = [
-        "Create a photorealistic chest-up portrait of a single adult synthetic actor for UGC advertising.",
+        "Create a candid chest-up smartphone portrait of one believable adult UGC creator in an ordinary real setting.",
         f"Age band: {age_band}.",
         f"Ethnicity: {ethnicity}.",
     ]
@@ -140,10 +148,12 @@ def _build_actor_prompt(
         details.append(f"Additional traits: {traits_text}.")
 
     details.extend([
-        "Use natural skin texture, realistic lighting, centered framing, and a simple uncluttered background.",
-        "The actor should look like a modern creator who could appear in a paid social ad.",
+        "Frame the person at a natural conversational distance with relaxed posture and an unscripted expression.",
+        "Use a simple lived-in background with slight real-world imperfection rather than a seamless studio backdrop.",
+        "The person should look like a real modern creator recording an authentic paid social testimonial.",
         "Keep the face fully visible with no hats, sunglasses, text overlays, watermarks, or extra people in frame.",
         "This must be an original person and must not resemble a celebrity, influencer, or public figure.",
+        ACTOR_PHOTOREALISM_REQUIREMENTS,
     ])
     return " ".join(details)
 
@@ -153,7 +163,8 @@ def _build_actor_variant_prompt(base_prompt: str, variation_notes: str = "") -> 
     notes = (variation_notes or "").strip()
     suffix = (
         "Keep the same person and facial identity as the reference image while creating a fresh portrait variation "
-        "with slightly different pose, expression, framing, or wardrobe details."
+        "with slightly different pose, expression, framing, or wardrobe details. Preserve real photographic skin texture, "
+        "natural asymmetry, believable lighting, and smartphone-camera realism; do not stylize or beautify the person."
     )
     if notes:
         suffix = f"{suffix} Variation request: {notes}."

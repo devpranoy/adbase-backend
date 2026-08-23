@@ -353,13 +353,18 @@ def stitch_videos(video_urls: list[str]) -> str:
     # Expected order for downstream ad flow: UGC hook first, product video second.
     first_video = clean_urls[0]
     second_video = clean_urls[1]
+    if REPLICATE_VIDEO_RESOLUTION.lower() == "1080p":
+        output_width, output_height = 1080, 1920
+    else:
+        output_width, output_height = 720, 1280
 
     candidate_inputs = [
-        {"video_files": [first_video, second_video], "keep_audio": True},
-        {"videos": [first_video, second_video], "keep_audio": True},
-        {"video_urls": [first_video, second_video], "keep_audio": True},
-        {"video1": first_video, "video2": second_video, "keep_audio": True},
-        {"input_video_1": first_video, "input_video_2": second_video, "keep_audio": True},
+        {
+            "video_files": [first_video, second_video],
+            "keep_audio": True,
+            "width": output_width,
+            "height": output_height,
+        },
     ]
     output = _run_model_with_fallback_inputs(REPLICATE_FFMPEG_MODEL, candidate_inputs)
     output_url = _extract_output_url(output)
