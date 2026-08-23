@@ -22,6 +22,17 @@ from config import (
 )
 from elevenlabs_voices import resolve_supported_voice, list_supported_voices
 
+PRODUCT_VIDEO_FORMAT_INSTRUCTION = (
+    "STRICT FORMAT REQUIREMENT: Produce only a vertical portrait 9:16 video composed for a mobile screen. "
+    "Keep all important subjects and product details inside the 9:16 safe area. "
+    "Do not produce landscape, widescreen, horizontal, square, letterboxed, or pillarboxed output."
+)
+
+
+def _product_video_prompt(prompt: str) -> str:
+    content = (prompt or "Smooth motion, cinematic quality").strip()
+    return f"{PRODUCT_VIDEO_FORMAT_INSTRUCTION}\n\n{content}"
+
 
 def _ensure_token():
     if not REPLICATE_API_TOKEN:
@@ -32,12 +43,12 @@ def _ensure_token():
 def start_image_to_video(image_url: str, prompt: str = "") -> str:
     """
     Start an image-to-video prediction. Returns the prediction id.
-    Default model: Google Veo 3.1 (prompt required; image optional for img-to-video).
+    Default model: Google Veo 3.1 Lite (prompt required; image optional for img-to-video).
     """
     _ensure_token()
-    # Veo 3.1 / 3.1 Fast: prompt required; image for image-to-video; optional resolution, duration, aspect_ratio
+    # Veo 3.1 Lite: prompt required; image for image-to-video; explicit portrait aspect ratio.
     input_params = {
-        "prompt": prompt or "Smooth motion, cinematic quality",
+        "prompt": _product_video_prompt(prompt),
         "image": image_url,
         "resolution": REPLICATE_VIDEO_RESOLUTION,
         "duration": REPLICATE_VIDEO_DURATION,
@@ -145,7 +156,7 @@ def run_image_to_video(image_url: str, prompt: str = "") -> str:
     """
     _ensure_token()
     input_payload = {
-        "prompt": prompt or "Smooth motion, cinematic quality",
+        "prompt": _product_video_prompt(prompt),
         "image": image_url,
         "resolution": REPLICATE_VIDEO_RESOLUTION,
         "duration": REPLICATE_VIDEO_DURATION,

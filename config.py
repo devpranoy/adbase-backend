@@ -13,15 +13,16 @@ SUPABASE_SAMPLE_VOICES_BASE_URL = os.environ.get(
 ).strip().rstrip("/")
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "").strip()
-# Image-to-video model (owner/name or owner/name:version). Default: Google Veo 3.1 Fast
+# Product image-to-video model (owner/name or owner/name:version).
 REPLICATE_IMAGE_TO_VIDEO_VERSION = os.environ.get(
     "REPLICATE_IMAGE_TO_VIDEO_VERSION",
-    "google/veo-3.1-fast",
+    "google/veo-3.1-lite",
 ).strip()
-# Veo defaults: resolution (720p | 1080p), duration in seconds (4 | 6 | 8), aspect_ratio (16:9 | 9:16)
+# Veo defaults: resolution (720p | 1080p) and duration in seconds (4 | 6 | 8).
 REPLICATE_VIDEO_RESOLUTION = os.environ.get("REPLICATE_VIDEO_RESOLUTION", "720p").strip()
 REPLICATE_VIDEO_DURATION = int(os.environ.get("REPLICATE_VIDEO_DURATION", "8") or "8")
-REPLICATE_VIDEO_ASPECT_RATIO = os.environ.get("REPLICATE_VIDEO_ASPECT_RATIO", "9:16").strip()
+# Product videos are always portrait; this is intentionally not environment-overridable.
+REPLICATE_VIDEO_ASPECT_RATIO = "9:16"
 REPLICATE_TTS_MODEL = os.environ.get("REPLICATE_TTS_MODEL", "elevenlabs/v3").strip()
 REPLICATE_TTS_VOICE = os.environ.get("REPLICATE_TTS_VOICE", "Rachel").strip()
 REPLICATE_TTS_LANGUAGE_CODE = os.environ.get("REPLICATE_TTS_LANGUAGE_CODE", "en").strip()

@@ -157,7 +157,10 @@ def _replicate_agent_generation(
     system_prompt = (
         "You are an ad creative system. Return strict JSON only with keys: "
         "script_writer {hook_text, hook_lines[], tone, duration_target_sec} and "
-        "story_writer {video_prompt, cta, shot_plan[]}."
+        "story_writer {video_prompt, cta, shot_plan[]}. "
+        "The story_writer video_prompt MUST strictly describe a vertical portrait 9:16 video. "
+        "Compose every subject, product, camera movement, and safe margin specifically for a 9:16 mobile frame; "
+        "never request landscape, widescreen, 16:9, square, or horizontal output."
     )
     user_content = {
         "user_prompt": user_prompt,
@@ -167,6 +170,7 @@ def _replicate_agent_generation(
         "requirements": [
             "script_writer hook must feel UGC, natural, direct",
             "story_writer video_prompt must be ready for image-to-video generation",
+            "story_writer video_prompt must explicitly require strict vertical portrait 9:16 composition",
             "output must be concise and production-usable",
         ],
     }

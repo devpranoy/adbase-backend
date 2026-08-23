@@ -41,10 +41,10 @@ Set these locally (and in Vercel) for auth, Supabase, and Replicate:
 - `SUPABASE_BUCKET_ACTORS` – (optional) Storage bucket for reusable actor portraits, default `actor-images`
 - `SUPABASE_SAMPLE_VOICES_BASE_URL` – (optional) Public base URL for voice samples, defaulting to the `sample_voices` Supabase bucket
 - `REPLICATE_API_TOKEN` – Replicate API token  
-- `REPLICATE_IMAGE_TO_VIDEO_VERSION` – (optional) Model, default `google/veo-3.1-fast`  
+- `REPLICATE_IMAGE_TO_VIDEO_VERSION` – (optional) Product video model, default `google/veo-3.1-lite`
 - `REPLICATE_VIDEO_RESOLUTION` – (optional) `720p` or `1080p`, default `720p`  
 - `REPLICATE_VIDEO_DURATION` – (optional) Seconds: `4`, `6`, or `8`, default `8`  
-- `REPLICATE_VIDEO_ASPECT_RATIO` – (optional) `16:9` or `9:16`, default `9:16`  
+- Product video aspect ratio is fixed to `9:16` and passed explicitly to Replicate
 - `REPLICATE_TEXT_MODEL` – (optional) Replicate LLM model for script/story agents, default `google/gemini-2.5-flash`  
 - `REPLICATE_TTS_MODEL` – (optional) Replicate TTS model for audio generation, default `elevenlabs/v3`  
 - `REPLICATE_TTS_VOICE` – (optional) Default ElevenLabs voice (name or voice_id), default `Rachel`  
